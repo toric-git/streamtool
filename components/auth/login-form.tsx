@@ -27,6 +27,7 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/dashboard";
   const oauthError = searchParams.get("error") === "oauth";
+  const oauthDetail = searchParams.get("detail");
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
@@ -47,36 +48,41 @@ export function LoginForm() {
     setGoogleError(null);
     setGoogleLoading(true);
     try {
+      const safeNext = next.startsWith("/") ? next : "/dashboard";
+      document.cookie = `auth_next=${encodeURIComponent(safeNext)}; path=/; max-age=600; samesite=lax`;
+
       const supabase = createClient();
-      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+      // Keep redirectTo free of query params so Supabase allow-list matches reliably.
+      const redirectTo = `${window.location.origin}/auth/callback`;
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo,
-          skipBrowserRedirect: false,
+          skipBrowserRedirect: true,
         },
       });
       if (error) {
         console.error("[auth] google oauth start failed", error.name, error.message);
         setGoogleError(
-          "Googleログインを開始できませんでした。Supabase で Google プロバイダを有効化し、Client ID / Secret を設定してください。",
+          "Googleログインを開始できませんでした。Supabase で Google プロバイダと Client ID / Secret を確認してください。",
         );
+        setGoogleLoading(false);
         return;
       }
       if (!data?.url) {
         setGoogleError(
           "Googleログイン用のURLを取得できませんでした。Providers 設定を確認してください。",
         );
+        setGoogleLoading(false);
+        return;
       }
-      // Successful start navigates away; if not, reset below in finally.
+      window.location.assign(data.url);
     } catch (err) {
       console.error("[auth] google oauth unexpected", err);
       setGoogleError(
         "Googleログインに失敗しました。Norton の HTTPS スキャンや Google 設定を確認してください。",
       );
-    } finally {
-      // Keep loading briefly if redirect is in progress; otherwise unlock.
-      window.setTimeout(() => setGoogleLoading(false), 2500);
+      setGoogleLoading(false);
     }
   }
 
@@ -95,6 +101,7 @@ export function LoginForm() {
           <Alert variant="destructive">
             {state.error ||
               googleError ||
+              oauthDetail ||
               "外部ログインに失敗しました。もう一度お試しください。"}
           </Alert>
         )}
