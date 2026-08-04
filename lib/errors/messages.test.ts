@@ -13,6 +13,7 @@ describe("error messages", () => {
     expect(mapAuthError("AuthRetryableFetchError fetch failed")).toContain(
       "接続",
     );
+    expect(mapAuthError("provider is not enabled")).toContain("Providers");
   });
 
   it("maps join errors", () => {

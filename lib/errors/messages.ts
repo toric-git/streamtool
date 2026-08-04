@@ -7,23 +7,33 @@ export function mapAuthError(message: string): string {
     lower.includes("certificate") ||
     lower.includes("ssl") ||
     lower.includes("tls") ||
-    lower.includes("retryable")
+    lower.includes("retryable") ||
+    lower.includes("unable to verify") ||
+    lower.includes("enotfound") ||
+    lower.includes("econnreset")
   ) {
-    return "Supabase に接続できませんでした。ネット接続、SSL検査（ウイルス対策ソフト）、プロジェクトURLを確認してください。";
+    return "Supabase に接続できませんでした。本番URLで試すか、Norton の HTTPS スキャンをオフにしてからローカルを再起動してください。";
   }
-  if (lower.includes("invalid login")) {
+  if (lower.includes("email_address_invalid") || lower.includes("email address")) {
+    return "このメールアドレスは使えません。Gmail など実在する形式のアドレスを使ってください。";
+  }
+  if (lower.includes("invalid login") || lower.includes("invalid_credentials")) {
     return "メールアドレスまたはパスワードが正しくありません。";
   }
   if (
     lower.includes("already registered") ||
-    lower.includes("already been registered")
+    lower.includes("already been registered") ||
+    lower.includes("user_already_exists")
   ) {
     return "このメールアドレスは既に登録されています。ログインしてください。";
   }
-  if (lower.includes("email not confirmed")) {
-    return "メールアドレスの確認が完了していません。受信トレイを確認してください。";
+  if (lower.includes("email not confirmed") || lower.includes("email_not_confirmed")) {
+    return "メールアドレスの確認が完了していません。受信トレイを確認するか、Supabase で Confirm email をオフにしてください。";
   }
-  if (lower.includes("rate limit")) {
+  if (lower.includes("provider is not enabled") || lower.includes("validation_failed")) {
+    return "このログイン方法は有効になっていません。Supabase の Providers 設定を確認してください。";
+  }
+  if (lower.includes("rate limit") || lower.includes("over_request")) {
     return "しばらく待ってから再度お試しください。";
   }
   return "認証に失敗しました。入力内容を確認して再度お試しください。";

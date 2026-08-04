@@ -31,8 +31,13 @@ export async function signInWithEmail(
       "[auth] signInWithEmail failed",
       error.name,
       error.message,
+      error.code,
     );
-    return { error: mapAuthError(`${error.name} ${error.message}`) };
+    return {
+      error: mapAuthError(
+        `${error.name} ${error.message} ${error.code ?? ""}`,
+      ),
+    };
   }
 
   const next = String(formData.get("next") || "/dashboard");
@@ -69,8 +74,13 @@ export async function signUpWithEmail(
       "[auth] signUpWithEmail failed",
       error.name,
       error.message,
+      error.code,
     );
-    return { error: mapAuthError(`${error.name} ${error.message}`) };
+    return {
+      error: mapAuthError(
+        `${error.name} ${error.message} ${error.code ?? ""}`,
+      ),
+    };
   }
 
   if (data.session) {

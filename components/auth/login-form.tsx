@@ -49,21 +49,34 @@ export function LoginForm() {
     try {
       const supabase = createClient();
       const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo },
+        options: {
+          redirectTo,
+          skipBrowserRedirect: false,
+        },
       });
       if (error) {
-        console.error("[auth] google oauth start failed", error.name);
+        console.error("[auth] google oauth start failed", error.name, error.message);
         setGoogleError(
-          "Googleログインを開始できませんでした。SupabaseでGoogleプロバイダが有効か確認してください。",
+          "Googleログインを開始できませんでした。Supabase で Google プロバイダを有効化し、Client ID / Secret を設定してください。",
         );
-        setGoogleLoading(false);
+        return;
       }
+      if (!data?.url) {
+        setGoogleError(
+          "Googleログイン用のURLを取得できませんでした。Providers 設定を確認してください。",
+        );
+      }
+      // Successful start navigates away; if not, reset below in finally.
     } catch (err) {
       console.error("[auth] google oauth unexpected", err);
-      setGoogleError("Googleログインに失敗しました。しばらくしてから再度お試しください。");
-      setGoogleLoading(false);
+      setGoogleError(
+        "Googleログインに失敗しました。Norton の HTTPS スキャンや Google 設定を確認してください。",
+      );
+    } finally {
+      // Keep loading briefly if redirect is in progress; otherwise unlock.
+      window.setTimeout(() => setGoogleLoading(false), 2500);
     }
   }
 
