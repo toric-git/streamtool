@@ -1,36 +1,135 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Realtime Soundboard
 
-## Getting Started
+複数ユーザーで共有できるリアルタイム・サウンドボードです。部屋の参加者が効果音ボタンを押すと、同室の全員と OBS ブラウザソースで同じ音が再生されます。
 
-First, run the development server:
+## 技術構成
+
+- Next.js 16 (App Router) + TypeScript strict
+- Tailwind CSS 4 + 最小 UI primitives（button/input/label/card/alert）
+- Supabase Auth / PostgreSQL / Realtime / Storage
+- Howler.js（音声）
+- dnd-kit（並び替え）
+- Zod（入力検証）
+- Vitest / Testing Library / Playwright（E2E 骨格）
+
+## 必要条件
+
+- Node.js 20+
+- npm
+- Supabase プロジェクト
+
+## インストール
+
+```bash
+npm install
+cp .env.example .env.local
+```
+
+## 環境変数
+
+| 変数 | 説明 |
+|------|------|
+| `NEXT_PUBLIC_APP_URL` | アプリ URL（例: http://localhost:3000） |
+| `NEXT_PUBLIC_APP_NAME` | 表示名（任意） |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | **サーバーのみ**。用途: パスワード付き参加、OBSトークン発行/検証、Storage削除、OBSセッション用メンバー登録 |
+| `OBS_TOKEN_PEPPER` | OBSトークンハッシュ用ペッパー |
+
+## Supabase セットアップ
+
+詳細は `docs/SETUP_PHASE2.md` も参照。
+
+1. プロジェクト作成
+2. Authentication
+   - Email 有効
+   - **Anonymous Sign-Ins 有効**（ゲスト / OBS に必須）
+   - （任意）Google OAuth
+   - Redirect URLs に `http://localhost:3000/auth/callback`
+3. SQL Editor で以下を順に実行
+   - `supabase/migrations/20260803220000_init.sql`
+   - `supabase/migrations/20260804120000_member_management.sql`
+   - `supabase/migrations/20260804130000_ownership_transfer.sql`
+4. Storage に `room-audio` / `room-images`（migration が作成）
+5. Realtime publication に `playback_events` 等が含まれること確認
+
+CLI の場合:
+
+```bash
+npx supabase login
+npx supabase link --project-ref <REF>
+npx supabase db push
+```
+
+## ローカル起動
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## コマンド
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run test:e2e   # Playwright（要: npx playwright install）
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Vercel デプロイ
 
-## Learn More
+1. リポジトリを Vercel に接続
+2. 上記環境変数を設定（`NEXT_PUBLIC_APP_URL` は本番 URL）
+3. Supabase Auth Redirect URLs に本番 callback を追加
 
-To learn more about Next.js, take a look at the following resources:
+## OBS ブラウザソース設定
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. 部屋設定で「OBSトークンを発行」
+2. 表示された URL をコピー（**一度だけ表示**）
+3. OBS → ソース → ブラウザ → URL に貼り付け
+4. 幅・高さは任意（映像は透明。音だけ使う想定）
+5. 推奨: 「OBS経由で音声を制御する」をオンにし、ブラウザソースの音量を OBS で調整
+6. デバッグ: URL 末尾に `&debug=1`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 音が出ない場合
 
-## Deploy on Vercel
+- ブラウザソースを右クリック → 更新
+- Anonymous Sign-Ins が有効か
+- トークン再発行後に古い URL を使っていないか
+- 部屋に承認済みサウンドがあるか
+- 「OBSテスト再生」でイベントが飛ぶか
+- 自動再生制限: 一度ソースをインタラクト/更新
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### セキュリティ
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- OBS URL / トークンを配信画面や公開ログに出さない
+- 漏えいしたら即座に再発行（旧トークン無効化）
+- `service_role` / pepper をクライアントに置かない
+
+## 再生の方針
+
+サーバーに受理された `playback_events` を Realtime（Postgres Changes）で受信してから再生します。体感遅延はネットワーク次第ですが、重複・暴発を避けるためローカル先行再生はしません。
+
+## 現在の制約
+
+- MP3/OGG の厳密な再生時間はクライアント申告 + マジックバイト検証（WAV はサーバーで duration 推定）
+- `toggle_loop`、押し続け再生は未対応（`one_shot` のみ）
+- お気に入りは端末の localStorage のみ（アカウント同期なし）
+- Playwright E2E はスモーク中心（実 DB 連携フローは手動検証）
+- 実音声の CI 完全検証は未実施
+
+## 今後の拡張候補
+
+波形編集、ラウドネス正規化、Twitch/YouTube/Discord、Stripe、Stream Deck/MIDI、AI 効果音、公開素材マーケット
+
+## 手動検証手順（要約）
+
+1. ユーザーA: 登録 → 部屋作成 → サウンドアップロード → 承認
+2. ユーザーB or ゲスト: 招待URL参加 → 音声有効化 → ボタン押下
+3. A/B 双方で一度だけ再生されること
+4. OBS URL で同様に再生
+5. 全停止が全員と OBS に効くこと
+6. pending 音がボード/OBSに出ないこと
+7. 無効トークンで OBS が拒否されること
+8. 連打でクールダウン/レート制限が働くこと

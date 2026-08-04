@@ -1,0 +1,15 @@
+# Minimal Supabase project stub for CLI users.
+# Link to your remote project with: npx supabase link --project-ref <ref>
+# Then apply migrations: npx supabase db push
+
+project_id = "realtime-soundboard"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15
+
+[auth]
+enabled = true
+enable_anonymous_sign_ins = true
