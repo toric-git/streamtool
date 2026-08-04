@@ -10,6 +10,9 @@ import {
 describe("error messages", () => {
   it("maps auth errors", () => {
     expect(mapAuthError("Invalid login credentials")).toContain("パスワード");
+    expect(mapAuthError("AuthRetryableFetchError fetch failed")).toContain(
+      "接続",
+    );
   });
 
   it("maps join errors", () => {

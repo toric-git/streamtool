@@ -1,6 +1,8 @@
-# Realtime Soundboard
+# Streamtool
 
-複数ユーザーで共有できるリアルタイム・サウンドボードです。部屋の参加者が効果音ボタンを押すと、同室の全員と OBS ブラウザソースで同じ音が再生されます。
+VTuber向け配信ツールハブです。現在利用可能なツールはリアルタイムサウンドボードで、コメント読み上げ・字幕翻訳などを順次追加予定です。
+
+サウンドボードでは、部屋の参加者が効果音ボタンを押すと、同室の全員と OBS ブラウザソースで同じ音が再生されます。
 
 ## 技術構成
 
@@ -30,7 +32,7 @@ cp .env.example .env.local
 | 変数 | 説明 |
 |------|------|
 | `NEXT_PUBLIC_APP_URL` | アプリ URL（例: http://localhost:3000） |
-| `NEXT_PUBLIC_APP_NAME` | 表示名（任意） |
+| `NEXT_PUBLIC_APP_NAME` | ハブ表示名（未設定時は `Streamtool`） |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | **サーバーのみ**。用途: パスワード付き参加、OBSトークン発行/検証、Storage削除、OBSセッション用メンバー登録 |

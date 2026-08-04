@@ -1,24 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #fff7fb;
+  --foreground: #1f1630;
   --card: #ffffff;
-  --card-foreground: #0f172a;
-  --primary: #0f766e;
-  --primary-foreground: #f0fdfa;
-  --secondary: #e2e8f0;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #ecfeff;
-  --accent-foreground: #134e4a;
-  --destructive: #dc2626;
-  --destructive-foreground: #fef2f2;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #0f766e;
-  --radius: 0.75rem;
+  --card-foreground: #1f1630;
+  --primary: #ff4d8d;
+  --primary-foreground: #fff7fb;
+  --secondary: #e8f7ff;
+  --secondary-foreground: #164e63;
+  --muted: #ffeef5;
+  --muted-foreground: #6b5b70;
+  --accent: #fff4bf;
+  --accent-foreground: #6b4e00;
+  --destructive: #e11d48;
+  --destructive-foreground: #fff1f2;
+  --border: #f3d5e4;
+  --input: #f3d5e4;
+  --ring: #22d3ee;
+  --radius: 1rem;
+  --hub-sky: #7dd3fc;
+  --hub-coral: #ff4d8d;
+  --hub-lemon: #fde047;
+  --hub-mint: #5eead4;
 }
 
 @theme inline {
@@ -39,7 +43,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-nunito);
+  --font-display: var(--font-fredoka);
   --font-mono: var(--font-geist-mono);
   --radius-lg: var(--radius);
 }
@@ -58,5 +63,56 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+  font-family: var(--font-nunito), "Hiragino Sans", "Segoe UI", sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-fredoka), var(--font-nunito), sans-serif;
+}
+
+@keyframes hub-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hub-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes hub-pulse-soft {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.animate-hub-rise {
+  animation: hub-rise 0.7s ease-out both;
+}
+
+.animate-hub-rise-delay {
+  animation: hub-rise 0.7s ease-out 0.12s both;
+}
+
+.animate-hub-float {
+  animation: hub-float 5s ease-in-out infinite;
+}
+
+.animate-hub-pulse {
+  animation: hub-pulse-soft 4s ease-in-out infinite;
 }

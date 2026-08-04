@@ -178,7 +178,7 @@ export function SoundboardApp({
 
   if (!audioUnlocked) {
     return (
-      <div className="p-4">
+      <div className="flex flex-1 items-center justify-center bg-[radial-gradient(ellipse_at_top,rgba(255,77,141,0.15),transparent_50%),linear-gradient(180deg,#fff7fb,#e8f7ff)] p-6">
         <AudioEnableGate
           onEnable={async () => {
             await unlockAudio();
@@ -190,11 +190,15 @@ export function SoundboardApp({
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b bg-card/80 px-4 py-3">
+    <div className="flex min-h-full flex-1 flex-col bg-[linear-gradient(180deg,#fff7fb_0%,#eef9ff_45%,#fff7fb_100%)]">
+      <header className="flex flex-wrap items-center gap-3 border-b border-border/70 bg-white/75 px-4 py-3 backdrop-blur-sm">
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-semibold">{roomName}</h1>
-          <p className="text-xs text-muted-foreground">コード {roomCode}</p>
+          <h1 className="font-display truncate text-xl font-semibold tracking-tight">
+            {roomName}
+          </h1>
+          <p className="text-xs font-bold text-muted-foreground">
+            コード {roomCode} · 大きいボタンを押すだけ
+          </p>
         </div>
         <ConnectionStatusBadge status={connectionStatus} />
         {canStopAll && <StopAllButton onStopAll={emitStopAll} />}
@@ -236,9 +240,9 @@ export function SoundboardApp({
             onToggleFavorite={toggleFavorite}
           />
 
-          <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-card p-3">
+          <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border/80 bg-white/90 p-4">
             <div className="flex items-center gap-2">
-              <Label htmlFor="deviceVolume">
+              <Label htmlFor="deviceVolume" className="font-bold">
                 端末音量 {Math.round(deviceVolume * 100)}%
               </Label>
               <input
@@ -249,15 +253,15 @@ export function SoundboardApp({
                 step={0.01}
                 value={deviceVolume}
                 onChange={(e) => setDeviceVolume(Number(e.target.value))}
-                className="w-40"
+                className="w-40 accent-[var(--hub-coral)]"
               />
             </div>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-sm font-bold">
               <input
                 type="checkbox"
                 checked={muted}
                 onChange={(e) => setMuted(e.target.checked)}
-                className="size-4"
+                className="size-4 accent-[var(--hub-coral)]"
               />
               ミュート
             </label>

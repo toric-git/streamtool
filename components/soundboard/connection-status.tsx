@@ -20,11 +20,11 @@ export function ConnectionStatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium",
-        status === "connected" && "border-teal-200 bg-teal-50 text-teal-800",
+        "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1 text-xs font-bold",
+        status === "connected" && "border-sky-200 bg-sky-50 text-sky-800",
         status === "connecting" && "border-amber-200 bg-amber-50 text-amber-800",
         status === "reconnecting" && "border-orange-200 bg-orange-50 text-orange-800",
-        status === "disconnected" && "border-slate-200 bg-slate-50 text-slate-600",
+        status === "disconnected" && "border-border bg-muted text-muted-foreground",
         className,
       )}
       aria-live="polite"
@@ -33,10 +33,10 @@ export function ConnectionStatusBadge({
         aria-hidden
         className={cn(
           "size-2 rounded-full",
-          status === "connected" && "bg-teal-500",
-          status === "connecting" && "bg-amber-500 animate-pulse",
-          status === "reconnecting" && "bg-orange-500 animate-pulse",
-          status === "disconnected" && "bg-slate-400",
+          status === "connected" && "bg-sky-500",
+          status === "connecting" && "animate-pulse bg-amber-500",
+          status === "reconnecting" && "animate-pulse bg-orange-500",
+          status === "disconnected" && "bg-muted-foreground",
         )}
       />
       <span>{LABELS[status]}</span>

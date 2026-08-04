@@ -44,11 +44,11 @@ export function SoundButton({
       disabled={isDisabled}
       onClick={onPress}
       className={cn(
-        "relative flex min-h-14 min-w-[44px] items-center justify-center overflow-hidden rounded-xl border border-black/10 px-3 py-4 text-center text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-        state === "playing" && "ring-2 ring-teal-400",
+        "relative flex min-h-20 min-w-[44px] items-center justify-center overflow-hidden rounded-2xl border-2 border-white/70 px-3 py-5 text-center text-base font-extrabold transition duration-150 hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97]",
+        state === "playing" && "ring-4 ring-sky-300",
         state === "error" && "ring-2 ring-destructive",
-        state === "pressed" && "scale-[0.98]",
-        isDisabled && "opacity-60",
+        state === "pressed" && "scale-[0.97]",
+        isDisabled && "opacity-55",
       )}
       style={{
         backgroundColor: imageUrl ? undefined : buttonColor,

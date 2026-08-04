@@ -17,20 +17,20 @@ export function CategoryRail({
 }) {
   return (
     <aside className="hidden flex-col gap-2 lg:flex">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="text-xs font-bold tracking-wide text-muted-foreground">
         カテゴリー
       </p>
       <CategoryButton
         active={categoryId === "all"}
         onClick={() => onChange("all")}
-        className="rounded-md px-3 py-2 text-left text-sm"
+        className="rounded-xl px-3 py-2.5 text-left text-sm font-bold"
       >
         すべて
       </CategoryButton>
       <CategoryButton
         active={categoryId === "favorites"}
         onClick={() => onChange("favorites")}
-        className="rounded-md px-3 py-2 text-left text-sm"
+        className="rounded-xl px-3 py-2.5 text-left text-sm font-bold"
         title="端末内のお気に入り（同期なし）"
       >
         お気に入り
@@ -40,7 +40,7 @@ export function CategoryRail({
           key={c.id}
           active={categoryId === c.id}
           onClick={() => onChange(c.id)}
-          className="rounded-md px-3 py-2 text-left text-sm"
+          className="rounded-xl px-3 py-2.5 text-left text-sm font-bold"
         >
           {c.name}
         </CategoryButton>
@@ -63,14 +63,14 @@ export function CategoryChips({
       <CategoryButton
         active={categoryId === "all"}
         onClick={() => onChange("all")}
-        className="whitespace-nowrap rounded-full border px-3 py-2 text-sm"
+        className="whitespace-nowrap rounded-xl border border-border bg-white/80 px-3 py-2 text-sm font-bold"
       >
         すべて
       </CategoryButton>
       <CategoryButton
         active={categoryId === "favorites"}
         onClick={() => onChange("favorites")}
-        className="whitespace-nowrap rounded-full border px-3 py-2 text-sm"
+        className="whitespace-nowrap rounded-xl border border-border bg-white/80 px-3 py-2 text-sm font-bold"
       >
         お気に入り
       </CategoryButton>
@@ -79,7 +79,7 @@ export function CategoryChips({
           key={c.id}
           active={categoryId === c.id}
           onClick={() => onChange(c.id)}
-          className="whitespace-nowrap rounded-full border px-3 py-2 text-sm"
+          className="whitespace-nowrap rounded-xl border border-border bg-white/80 px-3 py-2 text-sm font-bold"
         >
           {c.name}
         </CategoryButton>
@@ -105,7 +105,11 @@ function CategoryButton({
     <button
       type="button"
       title={title}
-      className={`${className} ${active ? "bg-secondary" : "hover:bg-muted"}`}
+      className={`${className} ${
+        active
+          ? "bg-primary text-primary-foreground"
+          : "hover:bg-secondary"
+      }`}
       onClick={onClick}
     >
       {children}

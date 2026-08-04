@@ -1,5 +1,7 @@
 export const APP_NAME =
-  process.env.NEXT_PUBLIC_APP_NAME?.trim() || "Realtime Soundboard";
+  process.env.NEXT_PUBLIC_APP_NAME?.trim() || "Streamtool";
+
+export const APP_TAGLINE = "VTuberのための配信ツールハブ";
 
 export const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||

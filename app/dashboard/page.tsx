@@ -41,31 +41,49 @@ export default async function DashboardPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-10">
+    <main className="relative flex min-h-full flex-1 flex-col overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,77,141,0.12),transparent_45%),linear-gradient(180deg,#fff7fb,#e8f7ff)]"
+      />
+      <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-10">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-sm text-muted-foreground">{APP_NAME}</p>
-          <h1 className="text-3xl font-semibold tracking-tight">ダッシュボード</h1>
-          <p className="mt-1 text-muted-foreground">
-            ようこそ、{profile?.display_name ?? "ユーザー"} さん
+          <p className="text-sm font-bold text-primary">
+            <Link href="/" className="hover:underline">
+              {APP_NAME}
+            </Link>
+            {" · "}
+            <Link href="/tools/soundboard" className="hover:underline">
+              サウンドボード
+            </Link>
+          </p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">
+            マイ部屋
+          </h1>
+          <p className="mt-1 font-semibold text-muted-foreground">
+            ようこそ、{profile?.display_name ?? "ユーザー"} さん。部屋を開いてすぐ押せます。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button asChild>
+          <Button asChild className="font-bold shadow-none">
             <Link href="/rooms/new">部屋を作成</Link>
           </Button>
+          <Button asChild variant="secondary" className="font-bold shadow-none">
+            <Link href="/">ハブへ</Link>
+          </Button>
           <form action={signOut}>
-            <Button type="submit" variant="outline">
+            <Button type="submit" variant="outline" className="font-bold">
               ログアウト
             </Button>
           </form>
         </div>
       </header>
 
-      <Card>
+      <Card className="border-border/80 bg-white/90">
         <CardHeader>
-          <CardTitle>あなたの部屋</CardTitle>
-          <CardDescription>
+          <CardTitle className="font-display">あなたの部屋</CardTitle>
+          <CardDescription className="font-semibold">
             所有・参加中の部屋一覧です。招待コードは各部屋の「招待」から共有できます。
           </CardDescription>
         </CardHeader>
@@ -108,6 +126,7 @@ export default async function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </main>
   );
 }

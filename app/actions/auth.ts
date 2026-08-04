@@ -27,8 +27,12 @@ export async function signInWithEmail(
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
 
   if (error) {
-    console.error("[auth] signInWithEmail failed", error.name);
-    return { error: mapAuthError(error.message) };
+    console.error(
+      "[auth] signInWithEmail failed",
+      error.name,
+      error.message,
+    );
+    return { error: mapAuthError(`${error.name} ${error.message}`) };
   }
 
   const next = String(formData.get("next") || "/dashboard");
@@ -61,8 +65,12 @@ export async function signUpWithEmail(
   });
 
   if (error) {
-    console.error("[auth] signUpWithEmail failed", error.name);
-    return { error: mapAuthError(error.message) };
+    console.error(
+      "[auth] signUpWithEmail failed",
+      error.name,
+      error.message,
+    );
+    return { error: mapAuthError(`${error.name} ${error.message}`) };
   }
 
   if (data.session) {

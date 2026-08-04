@@ -1,5 +1,16 @@
 export function mapAuthError(message: string): string {
   const lower = message.toLowerCase();
+  if (
+    lower.includes("fetch failed") ||
+    lower.includes("failed to fetch") ||
+    lower.includes("network") ||
+    lower.includes("certificate") ||
+    lower.includes("ssl") ||
+    lower.includes("tls") ||
+    lower.includes("retryable")
+  ) {
+    return "Supabase に接続できませんでした。ネット接続、SSL検査（ウイルス対策ソフト）、プロジェクトURLを確認してください。";
+  }
   if (lower.includes("invalid login")) {
     return "メールアドレスまたはパスワードが正しくありません。";
   }
