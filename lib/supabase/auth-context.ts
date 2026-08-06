@@ -1,3 +1,4 @@
+import { E, type ErrorCode } from "@/lib/errors/catalog";
 import { createClient } from "@/lib/supabase/server";
 import type { RoomRole } from "@/types/database";
 import type { User } from "@supabase/supabase-js";
@@ -33,6 +34,7 @@ export async function requireRoomActor(roomId: string): Promise<
   | {
       ok: false;
       error: string;
+      code: ErrorCode;
       supabase: AppSupabaseClient;
       user: User | null;
     }
@@ -41,23 +43,34 @@ export async function requireRoomActor(roomId: string): Promise<
   if (!user) {
     return {
       ok: false,
-      error: "ログインが必要です。",
+      error: E.AUTH_REQUIRED.message,
+      code: E.AUTH_REQUIRED.code,
       supabase,
       user: null,
     };
   }
 
-  const { data: membership } = await supabase
+  const { data: membership, error: membershipError } = await supabase
     .from("room_members")
     .select("role, can_play, can_upload, is_muted, display_name")
     .eq("room_id", roomId)
     .eq("user_id", user.id)
     .maybeSingle();
 
+  if (membershipError) {
+    console.error(
+      "[auth] membership lookup failed",
+      E.ROOM_NOT_MEMBER.code,
+      membershipError.code,
+      membershipError.message,
+    );
+  }
+
   if (!membership) {
     return {
       ok: false,
-      error: "この部屋のメンバーではありません。",
+      error: E.ROOM_NOT_MEMBER.message,
+      code: E.ROOM_NOT_MEMBER.code,
       supabase,
       user,
     };

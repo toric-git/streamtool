@@ -12,7 +12,9 @@ import {
 import { canManageTarget, filterHumanMembers, isObsMember } from "@/lib/rooms/members";
 import { getPermissionsForRole } from "@/lib/permissions/room-permissions";
 import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
+import type { AppError, ErrorCode } from "@/lib/errors/catalog";
 import type { RoomRole } from "@/types/database";
 
 export type ManageableMember = {
@@ -44,20 +46,25 @@ export function MemberManageList({
   members: ManageableMember[];
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const permissions = getPermissionsForRole(actorRole);
   const visible = filterHumanMembers(members);
   const obsCount = members.filter(isObsMember).length;
 
-  function run(action: () => Promise<{ ok: true } | { ok: false; error: string }>, okMsg: string) {
+  function run(
+    action: () => Promise<
+      { ok: true } | { ok: false; error: string; code: ErrorCode }
+    >,
+    okMsg: string,
+  ) {
     setError(null);
     setSuccess(null);
     startTransition(async () => {
       const result = await action();
       if (!result.ok) {
-        setError(result.error);
+        setError({ code: result.code, message: result.error });
         return;
       }
       setSuccess(okMsg);
@@ -67,7 +74,7 @@ export function MemberManageList({
 
   return (
     <div className="space-y-4">
-      {error && <Alert variant="destructive">{error}</Alert>}
+      {error && <ErrorAlert error={error} />}
       {success && <Alert>{success}</Alert>}
       {obsCount > 0 && (
         <p className="text-xs text-muted-foreground">

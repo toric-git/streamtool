@@ -9,7 +9,7 @@ describe("AudioEnableGate", () => {
     const onEnable = vi.fn();
     render(<AudioEnableGate onEnable={onEnable} />);
     await user.click(
-      screen.getByRole("button", { name: "参加して音声を有効にする" }),
+      screen.getByRole("button", { name: "タップして参加する" }),
     );
     expect(onEnable).toHaveBeenCalledOnce();
   });

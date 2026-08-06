@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { leaveRoom } from "@/app/actions/rooms";
 import { InviteDialog } from "@/components/rooms/invite-dialog";
 import { SoundboardApp } from "@/components/soundboard/soundboard-app";
-import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
 import { mapRoomPageError } from "@/lib/errors/messages";
 import { getPermissionsForRole } from "@/lib/permissions/room-permissions";
@@ -17,7 +17,7 @@ type Props = {
 export default async function RoomPage({ params, searchParams }: Props) {
   const { roomId } = await params;
   const { error: errorCode } = await searchParams;
-  const errorMessage = mapRoomPageError(errorCode);
+  const pageError = mapRoomPageError(errorCode);
 
   const actor = await requireRoomActor(roomId);
   if (!actor.ok) {
@@ -93,9 +93,9 @@ export default async function RoomPage({ params, searchParams }: Props) {
         )}
       </div>
 
-      {errorMessage && (
+      {pageError && (
         <div className="px-4 pt-3">
-          <Alert variant="destructive">{errorMessage}</Alert>
+          <ErrorAlert error={pageError} />
         </div>
       )}
 

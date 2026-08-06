@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { formatErrorCodeLine, E, type AppError } from "@/lib/errors/catalog";
 import { OBS_DISPLAY_NAME } from "@/lib/rooms/members";
 import { useRealtimeRoom } from "@/hooks/use-realtime-room";
 import { createClient } from "@/lib/supabase/client";
@@ -31,7 +32,7 @@ export function ObsPlayer({
   token: string;
   debug: boolean;
 }) {
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [room, setRoom] = useState<RoomInfo | null>(null);
   const [sounds, setSounds] = useState<Sound[]>([]);
   const [ready, setReady] = useState(false);
@@ -49,12 +50,16 @@ export function ObsPlayer({
       });
       const data = (await res.json()) as {
         error?: string;
+        code?: string;
         room?: RoomInfo;
         sounds?: Sound[];
       };
       if (cancelled) return;
       if (!res.ok || !data.room) {
-        setError(data.error ?? "OBSトークンの検証に失敗しました。");
+        setError({
+          code: (data.code as AppError["code"]) ?? E.OBS_VALIDATE_FAILED.code,
+          message: data.error ?? E.OBS_VALIDATE_FAILED.message,
+        });
         return;
       }
       setRoom(data.room);
@@ -66,9 +71,7 @@ export function ObsPlayer({
         options: { data: { display_name: OBS_DISPLAY_NAME } },
       });
       if (authError || !authData.user) {
-        setError(
-          "OBS用セッションの作成に失敗しました。Anonymous Sign-Ins を有効にしてください。",
-        );
+        setError(E.OBS_ANON_FAILED);
         return;
       }
 
@@ -78,14 +81,20 @@ export function ObsPlayer({
         body: JSON.stringify({ roomId, token }),
       });
       if (!joinRes.ok) {
-        const joinJson = (await joinRes.json()) as { error?: string };
-        setError(joinJson.error ?? "OBSセッションの準備に失敗しました。");
+        const joinJson = (await joinRes.json()) as {
+          error?: string;
+          code?: string;
+        };
+        setError({
+          code: (joinJson.code as AppError["code"]) ?? E.OBS_SESSION_FAILED.code,
+          message: joinJson.error ?? E.OBS_SESSION_FAILED.message,
+        });
         return;
       }
 
       setReady(true);
     })().catch(() => {
-      if (!cancelled) setError("OBSの初期化に失敗しました。");
+      if (!cancelled) setError(E.OBS_INIT_FAILED);
     });
 
     return () => {
@@ -121,7 +130,10 @@ export function ObsPlayer({
   if (error) {
     return (
       <div className="p-4 text-sm text-red-600" style={{ background: "transparent" }}>
-        {error}
+        <p>{error.message}</p>
+        <p className="mt-1 font-mono text-xs opacity-80">
+          {formatErrorCodeLine(error.code)}
+        </p>
       </div>
     );
   }

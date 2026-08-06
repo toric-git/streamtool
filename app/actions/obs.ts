@@ -1,8 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { actionFail, actionOk, type ActionResult } from "@/lib/actions/result";
+import {
+  actionFail,
+  actionFailFrom,
+  actionOk,
+  type ActionResult,
+} from "@/lib/actions/result";
 import { APP_URL } from "@/lib/app-config";
+import { E } from "@/lib/errors/catalog";
 import {
   generateObsTokenPlain,
   hashObsToken,
@@ -20,18 +26,16 @@ export type ObsTokenResult = ActionResult<{
 
 export async function issueObsToken(roomId: string): Promise<ObsTokenResult> {
   const actor = await requireRoomActor(roomId);
-  if (!actor.ok) return actionFail(actor.error);
+  if (!actor.ok) return actionFailFrom(actor);
   if (actor.membership.role !== "owner") {
-    return actionFail("OBSトークンを発行できるのはオーナーのみです。");
+    return actionFail(E.OBS_ISSUE_FORBIDDEN);
   }
 
   let admin;
   try {
     admin = createAdminClient();
   } catch {
-    return actionFail(
-      "SUPABASE_SERVICE_ROLE_KEY または OBS_TOKEN_PEPPER が未設定です。",
-    );
+    return actionFail(E.OBS_CONFIG_MISSING);
   }
 
   await admin
@@ -52,8 +56,14 @@ export async function issueObsToken(roomId: string): Promise<ObsTokenResult> {
   });
 
   if (error) {
-    console.error("[obs] issue token failed", error.code);
-    return actionFail("OBSトークンの発行に失敗しました。");
+    console.error(
+      "[obs]",
+      E.OBS_ISSUE_FAILED.code,
+      error.code,
+      error.message,
+      { roomId },
+    );
+    return actionFail(E.OBS_ISSUE_FAILED);
   }
 
   revalidatePath(`/rooms/${roomId}/settings`);

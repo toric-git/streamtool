@@ -5,6 +5,7 @@ import {
   SIGNED_URL_EXPIRES_IN,
   STORAGE_BUCKETS,
 } from "@/lib/app-config";
+import { E } from "@/lib/errors/catalog";
 import { requireRoomActor } from "@/lib/supabase/auth-context";
 import {
   getExtension,
@@ -26,13 +27,19 @@ export async function POST(request: Request) {
   try {
     json = await request.json();
   } catch {
-    return NextResponse.json({ error: "不正なリクエストです。" }, { status: 400 });
+    return NextResponse.json(
+      { error: E.VALIDATION.message, code: E.VALIDATION.code },
+      { status: 400 },
+    );
   }
 
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "入力が不正です" },
+      {
+        error: parsed.error.issues[0]?.message ?? E.VALIDATION.message,
+        code: E.VALIDATION.code,
+      },
       { status: 400 },
     );
   }
@@ -42,7 +49,7 @@ export async function POST(request: Request) {
   const actor = await requireRoomActor(roomId);
   if (!actor.ok) {
     return NextResponse.json(
-      { error: actor.error },
+      { error: actor.error, code: actor.code },
       { status: actor.user ? 403 : 401 },
     );
   }
@@ -59,7 +66,10 @@ export async function POST(request: Request) {
   if (!isAdmin) {
     if (!room?.upload_enabled || !membership.can_upload) {
       return NextResponse.json(
-        { error: "この部屋ではアップロードが許可されていません。" },
+        {
+          error: E.SOUND_UPLOAD_DISABLED.message,
+          code: E.SOUND_UPLOAD_DISABLED.code,
+        },
         { status: 403 },
       );
     }
@@ -73,12 +83,18 @@ export async function POST(request: Request) {
       durationMs: durationMs ?? null,
     });
     if (!v.ok) {
-      return NextResponse.json({ error: v.message }, { status: 400 });
+      return NextResponse.json(
+        { error: v.message, code: E.VALIDATION.code },
+        { status: 400 },
+      );
     }
   } else {
     const v = validateImageFileMeta({ filename, mimeType, sizeBytes });
     if (!v.ok) {
-      return NextResponse.json({ error: v.message }, { status: 400 });
+      return NextResponse.json(
+        { error: v.message, code: E.VALIDATION.code },
+        { status: 400 },
+      );
     }
   }
 
@@ -91,9 +107,17 @@ export async function POST(request: Request) {
     .createSignedUploadUrl(path);
 
   if (error || !data) {
-    console.error("[media] signed upload url failed", error?.name);
+    console.error(
+      "[media]",
+      E.MEDIA_UPLOAD_URL_FAILED.code,
+      error?.name,
+      error?.message,
+    );
     return NextResponse.json(
-      { error: "アップロード用URLの発行に失敗しました。再試行してください。" },
+      {
+        error: E.MEDIA_UPLOAD_URL_FAILED.message,
+        code: E.MEDIA_UPLOAD_URL_FAILED.code,
+      },
       { status: 500 },
     );
   }

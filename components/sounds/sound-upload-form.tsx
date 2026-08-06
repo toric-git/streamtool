@@ -5,9 +5,11 @@ import { createSound } from "@/app/actions/sounds";
 import { readAudioDurationMs, previewAudioFile } from "@/lib/audio/browser-meta";
 import { validateAudioFileMeta, validateImageFileMeta } from "@/lib/validation/schemas";
 import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { E, type AppError, withMessage } from "@/lib/errors/catalog";
 
 type Category = { id: string; name: string };
 
@@ -20,13 +22,13 @@ export function SoundUploadForm({
   categories: Category[];
   canUpload: boolean;
 }) {
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [durationMs, setDurationMs] = useState<number | null>(null);
 
   if (!canUpload) {
-    return <Alert>この部屋ではアップロードが許可されていません。</Alert>;
+    return <ErrorAlert error={E.SOUND_UPLOAD_DISABLED} />;
   }
 
   return (
@@ -44,7 +46,7 @@ export function SoundUploadForm({
 
         startTransition(async () => {
           if (!(audio instanceof File) || audio.size === 0) {
-            setError("音声ファイルを選択してください。");
+            setError(E.SOUND_FILE_REQUIRED);
             return;
           }
 
@@ -52,7 +54,7 @@ export function SoundUploadForm({
           try {
             duration = duration ?? (await readAudioDurationMs(audio));
           } catch {
-            setError("音声の再生時間を読み取れませんでした。別のファイルを試してください。");
+            setError(E.SOUND_DURATION_READ);
             return;
           }
 
@@ -63,7 +65,7 @@ export function SoundUploadForm({
             durationMs: duration,
           });
           if (!audioCheck.ok) {
-            setError(audioCheck.message);
+            setError(withMessage(E.VALIDATION, audioCheck.message));
             return;
           }
 
@@ -75,7 +77,7 @@ export function SoundUploadForm({
               sizeBytes: image.size,
             });
             if (!imageCheck.ok) {
-              setError(imageCheck.message);
+              setError(withMessage(E.VALIDATION, imageCheck.message));
               return;
             }
 
@@ -126,7 +128,7 @@ export function SoundUploadForm({
           });
 
           if (!result.ok) {
-            setError(result.error);
+            setError({ code: result.code, message: result.error });
             return;
           }
 
@@ -139,7 +141,7 @@ export function SoundUploadForm({
       }}
     >
       <h2 className="text-lg font-semibold">サウンドを追加</h2>
-      {error && <Alert variant="destructive">{error}</Alert>}
+      {error && <ErrorAlert error={error} />}
       {success && <Alert>{success}</Alert>}
 
       <div className="space-y-2">
@@ -158,7 +160,7 @@ export function SoundUploadForm({
               const ms = await readAudioDurationMs(file);
               setDurationMs(ms);
             } catch {
-              setError("音声メタデータの読み取りに失敗しました。");
+              setError(E.SOUND_META_READ);
             }
           }}
         />
@@ -234,13 +236,13 @@ export function SoundUploadForm({
             const input = document.getElementById("audio") as HTMLInputElement | null;
             const file = input?.files?.[0];
             if (!file) {
-              setError("試聴する音声を選択してください。");
+              setError(E.SOUND_PREVIEW_REQUIRED);
               return;
             }
             try {
               await previewAudioFile(file);
             } catch {
-              setError("試聴に失敗しました。ブラウザの自動再生制限を確認してください。");
+              setError(E.SOUND_PREVIEW_FAILED);
             }
           }}
         >
@@ -258,7 +260,7 @@ async function requestUploadUrl(options: {
   durationMs?: number;
 }): Promise<
   | { ok: true; path: string; token: string; signedUrl: string; bucket: string }
-  | { ok: false; error: string }
+  | { ok: false; error: AppError }
 > {
   const res = await fetch("/api/media/upload-url", {
     method: "POST",
@@ -274,13 +276,20 @@ async function requestUploadUrl(options: {
   });
   const data = (await res.json()) as {
     error?: string;
+    code?: string;
     path?: string;
     token?: string;
     signedUrl?: string;
     bucket?: string;
   };
   if (!res.ok || !data.path || !data.token || !data.signedUrl || !data.bucket) {
-    return { ok: false, error: data.error ?? "アップロードURLの取得に失敗しました。" };
+    return {
+      ok: false,
+      error: {
+        code: (data.code as AppError["code"]) ?? E.MEDIA_UPLOAD_URL_FAILED.code,
+        message: data.error ?? E.MEDIA_UPLOAD_URL_FAILED.message,
+      },
+    };
   }
   return {
     ok: true,
@@ -294,7 +303,7 @@ async function requestUploadUrl(options: {
 async function uploadWithToken(
   upload: { path: string; token: string; signedUrl: string; bucket: string },
   file: File,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: AppError }> {
   const { createClient } = await import("@/lib/supabase/client");
   const supabase = createClient();
   const { error } = await supabase.storage
@@ -305,10 +314,13 @@ async function uploadWithToken(
     });
 
   if (error) {
-    console.error("[upload] failed", error.name);
+    console.error("[upload]", E.MEDIA_UPLOAD_FAILED.code, error.name);
     return {
       ok: false,
-      error: "ファイルのアップロードに失敗しました。容量と形式を確認して再試行してください。",
+      error: withMessage(
+        E.MEDIA_UPLOAD_FAILED,
+        "ファイルのアップロードに失敗しました。容量と形式を確認して再試行してください。",
+      ),
     };
   }
   return { ok: true };

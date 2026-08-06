@@ -3,10 +3,11 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { joinRoomAction } from "@/app/actions/rooms";
-import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { E, type AppError } from "@/lib/errors/catalog";
 
 type JoinInfo = {
   name: string;
@@ -27,15 +28,19 @@ export function JoinRoomForm({
   isAuthenticated: boolean;
   isAnonymous: boolean;
 }) {
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [pending, startTransition] = useTransition();
 
   if (!info) {
     return (
       <div className="space-y-4">
-        <Alert variant="destructive">
-          招待コードが無効か、部屋が削除されています。コードを確認してください。
-        </Alert>
+        <ErrorAlert
+          error={{
+            ...E.ROOM_JOIN_INVALID_CODE,
+            message:
+              "招待コードが無効か、部屋が削除されています。コードを確認してください。",
+          }}
+        />
         <Button asChild variant="outline">
           <Link href="/">トップへ戻る</Link>
         </Button>
@@ -58,7 +63,7 @@ export function JoinRoomForm({
         startTransition(async () => {
           const result = await joinRoomAction(formData);
           if (result && "ok" in result && !result.ok) {
-            setError(result.error);
+            setError({ code: result.code, message: result.error });
           }
         });
       }}
@@ -71,12 +76,8 @@ export function JoinRoomForm({
         </p>
       </div>
 
-      {full && (
-        <Alert variant="destructive">
-          部屋が満員です。空きが出てから再度お試しください。
-        </Alert>
-      )}
-      {error && <Alert variant="destructive">{error}</Alert>}
+      {full && <ErrorAlert error={E.ROOM_JOIN_FULL} />}
+      {error && <ErrorAlert error={error} />}
 
       {(!isAuthenticated || isAnonymous) && (
         <div className="space-y-2">
@@ -110,9 +111,7 @@ export function JoinRoomForm({
 
       {!isAuthenticated && !canGuest ? (
         <div className="space-y-3">
-          <Alert>
-            この部屋はゲスト参加が無効です。ログインしてから参加してください。
-          </Alert>
+          <ErrorAlert error={E.ROOM_JOIN_GUEST_DISABLED} />
           <Button asChild className="w-full">
             <Link href={`/login?next=/join/${roomCode}`}>ログインして参加</Link>
           </Button>

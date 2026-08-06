@@ -10,7 +10,9 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { APP_NAME } from "@/lib/app-config";
 import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
+import { E, type AppError } from "@/lib/errors/catalog";
 import {
   Card,
   CardContent,
@@ -21,16 +23,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const initialState: AuthActionState = { error: null };
+const initialState: AuthActionState = { error: null, code: null };
 
 export function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/dashboard";
   const oauthError = searchParams.get("error") === "oauth";
   const oauthDetail = searchParams.get("detail");
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const initialMode =
+    searchParams.get("mode") === "signup" ? "signup" : "login";
+  const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleError, setGoogleError] = useState<AppError | null>(null);
 
   const [loginState, loginAction, loginPending] = useActionState(
     signInWithEmail,
@@ -62,26 +66,37 @@ export function LoginForm() {
         },
       });
       if (error) {
-        console.error("[auth] google oauth start failed", error.name, error.message);
-        setGoogleError(
-          "Googleログインを開始できませんでした。Supabase で Google プロバイダと Client ID / Secret を確認してください。",
+        console.error(
+          "[auth]",
+          E.AUTH_GOOGLE_FAILED.code,
+          error.name,
+          error.message,
         );
+        setGoogleError({
+          ...E.AUTH_GOOGLE_FAILED,
+          message:
+            "Googleログインを開始できませんでした。Supabase で Google プロバイダと Client ID / Secret を確認してください。",
+        });
         setGoogleLoading(false);
         return;
       }
       if (!data?.url) {
-        setGoogleError(
-          "Googleログイン用のURLを取得できませんでした。Providers 設定を確認してください。",
-        );
+        setGoogleError({
+          ...E.AUTH_PROVIDER_DISABLED,
+          message:
+            "Googleログイン用のURLを取得できませんでした。Providers 設定を確認してください。",
+        });
         setGoogleLoading(false);
         return;
       }
       window.location.assign(data.url);
     } catch (err) {
-      console.error("[auth] google oauth unexpected", err);
-      setGoogleError(
-        "Googleログインに失敗しました。Norton の HTTPS スキャンや Google 設定を確認してください。",
-      );
+      console.error("[auth]", E.AUTH_GOOGLE_FAILED.code, err);
+      setGoogleError({
+        ...E.AUTH_GOOGLE_FAILED,
+        message:
+          "Googleログインに失敗しました。Norton の HTTPS スキャンや Google 設定を確認してください。",
+      });
       setGoogleLoading(false);
     }
   }
@@ -98,12 +113,19 @@ export function LoginForm() {
       </CardHeader>
       <CardContent className="space-y-4">
         {(state.error || googleError || oauthError) && (
-          <Alert variant="destructive">
-            {state.error ||
-              googleError ||
-              oauthDetail ||
-              "外部ログインに失敗しました。もう一度お試しください。"}
-          </Alert>
+          <ErrorAlert
+            error={
+              state.error && state.code
+                ? { code: state.code, message: state.error }
+                : googleError
+                  ? googleError
+                  : {
+                      ...E.AUTH_OAUTH_FAILED,
+                      message:
+                        oauthDetail || E.AUTH_OAUTH_FAILED.message,
+                    }
+            }
+          />
         )}
         {state.success && <Alert>{state.success}</Alert>}
 

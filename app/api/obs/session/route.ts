@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { E } from "@/lib/errors/catalog";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { hashObsToken, verifyObsToken } from "@/lib/obs/token";
@@ -20,26 +21,38 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "セッションがありません。" }, { status: 401 });
+    return NextResponse.json(
+      { error: E.AUTH_REQUIRED.message, code: E.AUTH_REQUIRED.code },
+      { status: 401 },
+    );
   }
 
   let json: unknown;
   try {
     json = await request.json();
   } catch {
-    return NextResponse.json({ error: "不正なリクエストです。" }, { status: 400 });
+    return NextResponse.json(
+      { error: E.VALIDATION.message, code: E.VALIDATION.code },
+      { status: 400 },
+    );
   }
 
   const parsed = schema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "入力が不正です。" }, { status: 400 });
+    return NextResponse.json(
+      { error: E.VALIDATION.message, code: E.VALIDATION.code },
+      { status: 400 },
+    );
   }
 
   let admin;
   try {
     admin = createAdminClient();
   } catch {
-    return NextResponse.json({ error: "サーバー設定が不足しています。" }, { status: 500 });
+    return NextResponse.json(
+      { error: E.OBS_CONFIG_MISSING.message, code: E.OBS_CONFIG_MISSING.code },
+      { status: 500 },
+    );
   }
 
   const tokenHash = hashObsToken(parsed.data.token);
@@ -55,7 +68,10 @@ export async function POST(request: Request) {
     tokenRow.room_id !== parsed.data.roomId ||
     !verifyObsToken(parsed.data.token, tokenRow.token_hash)
   ) {
-    return NextResponse.json({ error: "OBSトークンが無効です。" }, { status: 403 });
+    return NextResponse.json(
+      { error: E.OBS_VALIDATE_FAILED.message, code: E.OBS_VALIDATE_FAILED.code },
+      { status: 403 },
+    );
   }
 
   const { data: existing } = await admin
@@ -76,9 +92,17 @@ export async function POST(request: Request) {
       is_muted: true,
     });
     if (error) {
-      console.error("[obs] member bootstrap failed", error.code);
+      console.error(
+        "[obs]",
+        E.OBS_SESSION_FAILED.code,
+        error.code,
+        error.message,
+      );
       return NextResponse.json(
-        { error: "OBSメンバー登録に失敗しました。" },
+        {
+          error: E.OBS_SESSION_FAILED.message,
+          code: E.OBS_SESSION_FAILED.code,
+        },
         { status: 500 },
       );
     }

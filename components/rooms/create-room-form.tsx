@@ -2,13 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { createRoom } from "@/app/actions/rooms";
-import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { AppError } from "@/lib/errors/catalog";
 
 export function CreateRoomForm() {
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [pending, startTransition] = useTransition();
 
   return (
@@ -21,12 +22,12 @@ export function CreateRoomForm() {
         startTransition(async () => {
           const result = await createRoom(formData);
           if (result && "ok" in result && !result.ok) {
-            setError(result.error);
+            setError({ code: result.code, message: result.error });
           }
         });
       }}
     >
-      {error && <Alert variant="destructive">{error}</Alert>}
+      {error && <ErrorAlert error={error} />}
 
       <div className="space-y-2">
         <Label htmlFor="name">部屋名</Label>

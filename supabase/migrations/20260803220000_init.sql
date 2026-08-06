@@ -761,6 +761,12 @@ create policy rooms_select_member
 on public.rooms for select
 using (public.is_room_member(id));
 
+-- Needed so createRoom can return the new row before owner membership exists,
+-- and so room_members_insert_owner_bootstrap EXISTS (select from rooms) works.
+create policy rooms_select_owner
+on public.rooms for select
+using (owner_id = auth.uid());
+
 create policy rooms_insert_authenticated
 on public.rooms for insert
 with check (auth.uid() = owner_id);

@@ -21,8 +21,9 @@ import {
   type BoardSound,
 } from "@/components/soundboard/sound-grid";
 import { StopAllButton } from "@/components/soundboard/stop-all-button";
-import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import { Label } from "@/components/ui/label";
+import { E, type AppError, withMessage } from "@/lib/errors/catalog";
 import { mapPlaybackError } from "@/lib/errors/messages";
 import { canUserPlay, isOwnerOrAdmin } from "@/lib/permissions/room-permissions";
 import type { RoomRole } from "@/types/database";
@@ -71,7 +72,7 @@ export function SoundboardApp({
   const [deviceVolume, setDeviceVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [categoryId, setCategoryId] = useState<CategoryFilter>("all");
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<AppError | null>(null);
   const { coolingIds, cooldownProgress, startCooldown } = useSoundCooldown();
   const { favoriteIds, toggleFavorite, isFavorite } = useFavoriteSounds(roomId);
   const imageUrls = useSignedMediaUrls({
@@ -135,11 +136,13 @@ export function SoundboardApp({
   async function emitPlay(sound: BoardSound) {
     setActionError(null);
     if (!canPlay) {
-      setActionError("再生権限がありません。");
+      setActionError(E.PLAY_DENIED);
       return;
     }
     if (coolingIds[sound.id]) {
-      setActionError("クールダウン中です。少し待ってから押してください。");
+      setActionError(
+        withMessage(E.PLAY_COOLDOWN, "クールダウン中です。少し待ってから押してください。"),
+      );
       return;
     }
 
@@ -153,8 +156,9 @@ export function SoundboardApp({
     });
 
     if (error) {
-      console.error("[board] play rejected", error.code);
-      setActionError(mapPlaybackError(error.message));
+      const mapped = mapPlaybackError(error.message);
+      console.error("[board]", mapped.code, error.code, error.message);
+      setActionError(mapped);
       return;
     }
 
@@ -206,7 +210,12 @@ export function SoundboardApp({
 
       {(actionError || lastError) && (
         <div className="px-4 pt-3">
-          <Alert variant="destructive">{actionError || lastError}</Alert>
+          <ErrorAlert
+            error={
+              actionError ??
+              withMessage(E.PLAY_FAILED, lastError ?? E.PLAY_FAILED.message)
+            }
+          />
         </div>
       )}
 

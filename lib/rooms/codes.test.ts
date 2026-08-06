@@ -15,7 +15,11 @@ describe("room codes", () => {
   });
 
   it("maps join errors to Japanese guidance", () => {
-    expect(mapRoomJoinError("room is full")).toContain("満員");
-    expect(mapRoomJoinError("guest join disabled")).toContain("ゲスト");
+    const full = mapRoomJoinError("room is full");
+    expect(full.message).toContain("満員");
+    expect(full.code).toBe("E2305");
+    const guest = mapRoomJoinError("guest join disabled");
+    expect(guest.message).toContain("ゲスト");
+    expect(guest.code).toBe("E2308");
   });
 });

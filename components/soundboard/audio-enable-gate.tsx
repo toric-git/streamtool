@@ -1,7 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { E, withMessage } from "@/lib/errors/catalog";
 
 export function AudioEnableGate({
   onEnable,
@@ -20,7 +21,9 @@ export function AudioEnableGate({
       <p className="max-w-md text-sm font-semibold leading-relaxed text-muted-foreground">
         ブラウザの制限で、最初にワンタップが必要です。押したらすぐにボードが使えます。
       </p>
-      {error && <Alert variant="destructive">{error}</Alert>}
+      {error && (
+        <ErrorAlert error={withMessage(E.PLAY_FAILED, error)} className="text-left" />
+      )}
       <Button
         type="button"
         size="lg"

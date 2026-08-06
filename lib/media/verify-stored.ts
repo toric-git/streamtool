@@ -1,4 +1,5 @@
 import { STORAGE_BUCKETS } from "@/lib/app-config";
+import { E, type AppError, withMessage } from "@/lib/errors/catalog";
 import { createClient } from "@/lib/supabase/server";
 import {
   extensionMatchesFormat,
@@ -12,36 +13,44 @@ const HEADER_BYTES = 256 * 1024; // enough for WAV fmt/data headers and magic
 export async function verifyStoredAudio(options: {
   path: string;
   claimedDurationMs: number;
-}): Promise<{ ok: true; durationMs: number } | { ok: false; error: string }> {
+}): Promise<{ ok: true; durationMs: number } | { ok: false; error: AppError }> {
   const supabase = await createClient();
   const { data, error } = await supabase.storage
     .from(STORAGE_BUCKETS.audio)
     .download(options.path);
 
   if (error || !data) {
-    console.error("[media] audio download for verify failed", error?.name);
-    return {
-      ok: false,
-      error: "アップロード済み音声の検証に失敗しました。再アップロードしてください。",
-    };
+    console.error(
+      "[media]",
+      E.MEDIA_AUDIO_VERIFY.code,
+      error?.name,
+      error?.message,
+    );
+    return { ok: false, error: E.MEDIA_AUDIO_VERIFY };
   }
 
   const buffer = new Uint8Array(await data.arrayBuffer());
   if (buffer.byteLength === 0) {
-    return { ok: false, error: "音声ファイルが空です。" };
+    return { ok: false, error: E.MEDIA_AUDIO_EMPTY };
   }
 
   const slice = buffer.slice(0, Math.min(buffer.byteLength, HEADER_BYTES));
   const inspected = inspectAudioHeader(slice);
   if (!inspected.ok) {
-    return { ok: false, error: inspected.message };
+    return {
+      ok: false,
+      error: withMessage(E.VALIDATION, inspected.message),
+    };
   }
 
   const ext = getExtension(options.path);
   if (!extensionMatchesFormat(ext, inspected.format)) {
     return {
       ok: false,
-      error: "ファイル拡張子と実際の音声形式が一致しません。",
+      error: withMessage(
+        E.VALIDATION,
+        "ファイル拡張子と実際の音声形式が一致しません。",
+      ),
     };
   }
 
@@ -49,7 +58,10 @@ export async function verifyStoredAudio(options: {
   if (!durationMs || durationMs <= 0 || durationMs > 30_000) {
     return {
       ok: false,
-      error: "再生時間が不正です。30秒以下のファイルをアップロードしてください。",
+      error: withMessage(
+        E.VALIDATION,
+        "再生時間が不正です。30秒以下のファイルをアップロードしてください。",
+      ),
     };
   }
 
@@ -60,7 +72,10 @@ export async function verifyStoredAudio(options: {
   ) {
     return {
       ok: false,
-      error: "申告された再生時間とファイル内容が一致しません。別のファイルを試してください。",
+      error: withMessage(
+        E.VALIDATION,
+        "申告された再生時間とファイル内容が一致しません。別のファイルを試してください。",
+      ),
     };
   }
 
@@ -69,24 +84,29 @@ export async function verifyStoredAudio(options: {
 
 export async function verifyStoredImage(options: {
   path: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<{ ok: true } | { ok: false; error: AppError }> {
   const supabase = await createClient();
   const { data, error } = await supabase.storage
     .from(STORAGE_BUCKETS.images)
     .download(options.path);
 
   if (error || !data) {
-    console.error("[media] image download for verify failed", error?.name);
-    return {
-      ok: false,
-      error: "アップロード済み画像の検証に失敗しました。再アップロードしてください。",
-    };
+    console.error(
+      "[media]",
+      E.MEDIA_IMAGE_VERIFY.code,
+      error?.name,
+      error?.message,
+    );
+    return { ok: false, error: E.MEDIA_IMAGE_VERIFY };
   }
 
   const buffer = new Uint8Array(await data.arrayBuffer());
   const inspected = inspectImageHeader(buffer.slice(0, 64));
   if (!inspected.ok) {
-    return { ok: false, error: inspected.message };
+    return {
+      ok: false,
+      error: withMessage(E.VALIDATION, inspected.message),
+    };
   }
 
   const ext = getExtension(options.path);
@@ -98,7 +118,10 @@ export async function verifyStoredImage(options: {
   if (!okExt) {
     return {
       ok: false,
-      error: "ファイル拡張子と実際の画像形式が一致しません。",
+      error: withMessage(
+        E.VALIDATION,
+        "ファイル拡張子と実際の画像形式が一致しません。",
+      ),
     };
   }
 

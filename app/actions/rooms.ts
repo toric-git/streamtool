@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { APP_URL } from "@/lib/app-config";
-import { actionFail, actionOk, type ActionResult } from "@/lib/actions/result";
+import {
+  actionFail,
+  actionFailFrom,
+  actionOk,
+  type ActionResult,
+} from "@/lib/actions/result";
+import { E, withMessage } from "@/lib/errors/catalog";
 import { mapRoomJoinError } from "@/lib/errors/messages";
 import { buildInviteUrl, generateRoomCode } from "@/lib/rooms/codes";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -24,7 +30,7 @@ export async function createRoom(
   formData: FormData,
 ): Promise<ActionResult<{ roomId: string }>> {
   const { supabase, user } = await getSessionUser();
-  if (!user) return actionFail("ログインが必要です。");
+  if (!user) return actionFail(E.AUTH_REQUIRED);
 
   const parsed = createRoomSchema.safeParse({
     name: formData.get("name"),
@@ -38,7 +44,10 @@ export async function createRoom(
 
   if (!parsed.success) {
     return actionFail(
-      parsed.error.issues[0]?.message ?? "入力内容が正しくありません",
+      withMessage(
+        E.VALIDATION,
+        parsed.error.issues[0]?.message ?? E.VALIDATION.message,
+      ),
     );
   }
 
@@ -48,16 +57,44 @@ export async function createRoom(
     .eq("id", user.id)
     .maybeSingle();
 
-  const displayName = profile?.display_name ?? "Owner";
+  const displayName =
+    profile?.display_name ??
+    user.user_metadata?.display_name ??
+    user.user_metadata?.full_name ??
+    user.email?.split("@")[0] ??
+    "Owner";
+
+  // Ensure profile exists (FK on rooms.owner_id). Trigger may have missed OAuth users.
+  if (!profile) {
+    const admin = createAdminClient();
+    const { error: profileError } = await admin.from("profiles").upsert({
+      id: user.id,
+      display_name: displayName,
+    });
+    if (profileError) {
+      console.error(
+        "[rooms]",
+        E.ROOM_CREATE_PROFILE.code,
+        profileError.code,
+        profileError.message,
+        { userId: user.id },
+      );
+      return actionFail(E.ROOM_CREATE_PROFILE);
+    }
+  }
+
   const password = parsed.data.password?.trim() || "";
   const passwordHash = password ? await hashRoomPassword(password) : null;
 
+  // Bootstrap via service role: owner SELECT RLS may be missing on older DBs,
+  // which breaks insert().select() and room_members EXISTS checks.
+  const admin = createAdminClient();
   let roomId: string | null = null;
   let lastError: string | null = null;
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const roomCode = generateRoomCode();
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("rooms")
       .insert({
         owner_id: user.id,
@@ -79,19 +116,25 @@ export async function createRoom(
     }
     lastError = error?.message ?? "create failed";
     if (!error?.message.toLowerCase().includes("duplicate")) {
-      console.error("[rooms] create failed", error?.code);
-      return actionFail(
-        "部屋の作成に失敗しました。しばらくしてから再度お試しください。",
+      console.error(
+        "[rooms]",
+        E.ROOM_CREATE_FAILED.code,
+        error?.code,
+        error?.message,
+        { userId: user.id, attempt },
       );
+      return actionFail(E.ROOM_CREATE_FAILED);
     }
   }
 
   if (!roomId) {
-    console.error("[rooms] create exhausted retries", lastError);
-    return actionFail("部屋コードの発行に失敗しました。再試行してください。");
+    console.error("[rooms]", E.ROOM_CREATE_CODE.code, lastError, {
+      userId: user.id,
+    });
+    return actionFail(E.ROOM_CREATE_CODE);
   }
 
-  const { error: memberError } = await supabase.from("room_members").insert({
+  const { error: memberError } = await admin.from("room_members").insert({
     room_id: roomId,
     user_id: user.id,
     display_name: displayName,
@@ -101,11 +144,15 @@ export async function createRoom(
   });
 
   if (memberError) {
-    console.error("[rooms] owner member insert failed", memberError.code);
-    await supabase.from("rooms").delete().eq("id", roomId);
-    return actionFail(
-      "部屋メンバーの登録に失敗しました。もう一度作成してください。",
+    console.error(
+      "[rooms]",
+      E.ROOM_CREATE_MEMBER.code,
+      memberError.code,
+      memberError.message,
+      { userId: user.id, roomId },
     );
+    await admin.from("rooms").delete().eq("id", roomId);
+    return actionFail(E.ROOM_CREATE_MEMBER);
   }
 
   revalidatePath("/dashboard");
@@ -117,11 +164,11 @@ export async function updateRoom(
   formData: FormData,
 ): Promise<ActionResult> {
   const actor = await requireRoomActor(roomId);
-  if (!actor.ok) return actionFail(actor.error);
+  if (!actor.ok) return actionFailFrom(actor);
 
   const role = actor.membership.role;
   if (role !== "owner" && role !== "admin") {
-    return actionFail("部屋設定を変更する権限がありません。");
+    return actionFail(E.ROOM_UPDATE_FORBIDDEN);
   }
 
   const parsed = updateRoomSchema.safeParse({
@@ -143,7 +190,10 @@ export async function updateRoom(
 
   if (!parsed.success) {
     return actionFail(
-      parsed.error.issues[0]?.message ?? "入力内容が正しくありません",
+      withMessage(
+        E.VALIDATION,
+        parsed.error.issues[0]?.message ?? E.VALIDATION.message,
+      ),
     );
   }
 
@@ -175,8 +225,14 @@ export async function updateRoom(
     .update(patch)
     .eq("id", roomId);
   if (error) {
-    console.error("[rooms] update failed", error.code);
-    return actionFail("部屋設定の更新に失敗しました。");
+    console.error(
+      "[rooms]",
+      E.ROOM_UPDATE_FAILED.code,
+      error.code,
+      error.message,
+      { roomId },
+    );
+    return actionFail(E.ROOM_UPDATE_FAILED);
   }
 
   revalidatePath(`/rooms/${roomId}`);
@@ -187,15 +243,21 @@ export async function updateRoom(
 
 export async function deleteRoom(roomId: string): Promise<ActionResult> {
   const actor = await requireRoomActor(roomId);
-  if (!actor.ok) return actionFail(actor.error);
+  if (!actor.ok) return actionFailFrom(actor);
   if (actor.membership.role !== "owner") {
-    return actionFail("部屋を削除できるのはオーナーのみです。");
+    return actionFail(E.ROOM_DELETE_FORBIDDEN);
   }
 
   const { error } = await actor.supabase.from("rooms").delete().eq("id", roomId);
   if (error) {
-    console.error("[rooms] delete failed", error.code);
-    return actionFail("部屋の削除に失敗しました。");
+    console.error(
+      "[rooms]",
+      E.ROOM_DELETE_FAILED.code,
+      error.code,
+      error.message,
+      { roomId },
+    );
+    return actionFail(E.ROOM_DELETE_FAILED);
   }
 
   revalidatePath("/dashboard");
@@ -213,7 +275,10 @@ export async function joinRoomAction(
 
   if (!parsed.success) {
     return actionFail(
-      parsed.error.issues[0]?.message ?? "入力内容が正しくありません",
+      withMessage(
+        E.VALIDATION,
+        parsed.error.issues[0]?.message ?? E.VALIDATION.message,
+      ),
     );
   }
 
@@ -226,7 +291,7 @@ export async function joinRoomAction(
 
   if (!user && asGuest) {
     if (!parsed.data.displayName) {
-      return actionFail("ゲスト参加には表示名が必要です。");
+      return actionFail(E.ROOM_JOIN_GUEST_NAME);
     }
     const { data, error } = await supabase.auth.signInAnonymously({
       options: {
@@ -234,16 +299,19 @@ export async function joinRoomAction(
       },
     });
     if (error || !data.user) {
-      console.error("[rooms] anonymous sign-in failed", error?.name);
-      return actionFail(
-        "ゲスト認証に失敗しました。Supabase で Anonymous Sign-Ins が有効か確認してください。",
+      console.error(
+        "[rooms]",
+        E.AUTH_ANON_FAILED.code,
+        error?.name,
+        error?.message,
       );
+      return actionFail(E.AUTH_ANON_FAILED);
     }
     user = data.user;
   }
 
   if (!user) {
-    return actionFail("参加するにはログインまたはゲスト参加が必要です。");
+    return actionFail(E.ROOM_JOIN_AUTH_REQUIRED);
   }
 
   const { data: info, error: infoError } = await supabase.rpc(
@@ -252,32 +320,35 @@ export async function joinRoomAction(
   );
 
   if (infoError) {
-    console.error("[rooms] join info failed", infoError.code);
-    return actionFail("部屋情報の取得に失敗しました。");
+    console.error(
+      "[rooms]",
+      E.ROOM_JOIN_INFO_FAILED.code,
+      infoError.code,
+      infoError.message,
+    );
+    return actionFail(E.ROOM_JOIN_INFO_FAILED);
   }
 
   const roomInfo = Array.isArray(info) ? info[0] : info;
   if (!roomInfo) {
-    return actionFail("招待コードが無効です。コードを確認してください。");
+    return actionFail(E.ROOM_JOIN_INVALID_CODE);
   }
 
   if (roomInfo.member_count >= roomInfo.max_members) {
-    return actionFail("部屋が満員です。空きが出てから再度お試しください。");
+    return actionFail(E.ROOM_JOIN_FULL);
   }
 
   if (roomInfo.has_password) {
     const password = parsed.data.password?.trim() || "";
     if (!password) {
-      return actionFail("この部屋には参加パスワードが必要です。");
+      return actionFail(E.ROOM_JOIN_PASSWORD_REQUIRED);
     }
 
     let admin;
     try {
       admin = createAdminClient();
     } catch {
-      return actionFail(
-        "サーバー設定が不足しています。SUPABASE_SERVICE_ROLE_KEY を設定してください。",
-      );
+      return actionFail(E.ROOM_SERVER_CONFIG);
     }
 
     const { data: roomRow, error: roomError } = await admin
@@ -287,19 +358,17 @@ export async function joinRoomAction(
       .maybeSingle();
 
     if (roomError || !roomRow?.password_hash) {
-      return actionFail("部屋が見つかりません。");
+      return actionFail(E.ROOM_NOT_FOUND);
     }
 
     const isAnonymous = Boolean(user.is_anonymous);
     if (isAnonymous && !roomRow.guest_enabled) {
-      return actionFail(
-        "この部屋はゲスト参加が許可されていません。ログインして参加してください。",
-      );
+      return actionFail(E.ROOM_JOIN_GUEST_DISABLED);
     }
 
     const ok = await verifyRoomPassword(password, roomRow.password_hash);
     if (!ok) {
-      return actionFail("参加パスワードが違います。");
+      return actionFail(E.ROOM_JOIN_PASSWORD_WRONG);
     }
 
     const { data: joined, error: joinError } = await admin.rpc(
@@ -312,13 +381,19 @@ export async function joinRoomAction(
     );
 
     if (joinError) {
-      console.error("[rooms] server_join_room failed", joinError.code);
-      return actionFail(mapRoomJoinError(joinError.message));
+      const mapped = mapRoomJoinError(joinError.message);
+      console.error(
+        "[rooms]",
+        mapped.code,
+        joinError.code,
+        joinError.message,
+      );
+      return actionFail(mapped);
     }
 
     const row = Array.isArray(joined) ? joined[0] : joined;
     if (!row?.room_id) {
-      return actionFail("部屋への参加に失敗しました。");
+      return actionFail(E.ROOM_JOIN_FAILED);
     }
 
     revalidatePath("/dashboard");
@@ -326,9 +401,7 @@ export async function joinRoomAction(
   }
 
   if (!roomInfo.guest_enabled && Boolean(user.is_anonymous)) {
-    return actionFail(
-      "この部屋はゲスト参加が許可されていません。ログインして参加してください。",
-    );
+    return actionFail(E.ROOM_JOIN_GUEST_DISABLED);
   }
 
   const { data: joined, error: joinError } = await supabase.rpc("join_room", {
@@ -338,13 +411,14 @@ export async function joinRoomAction(
   });
 
   if (joinError) {
-    console.error("[rooms] join_room failed", joinError.code);
-    return actionFail(mapRoomJoinError(joinError.message));
+    const mapped = mapRoomJoinError(joinError.message);
+    console.error("[rooms]", mapped.code, joinError.code, joinError.message);
+    return actionFail(mapped);
   }
 
   const row = Array.isArray(joined) ? joined[0] : joined;
   if (!row?.room_id) {
-    return actionFail("部屋への参加に失敗しました。");
+    return actionFail(E.ROOM_JOIN_FAILED);
   }
 
   revalidatePath("/dashboard");
@@ -368,7 +442,13 @@ export async function leaveRoom(roomId: string): Promise<void> {
     .eq("user_id", actor.user.id);
 
   if (error) {
-    console.error("[rooms] leave failed", error.code);
+    console.error(
+      "[rooms]",
+      E.ROOM_LEAVE_FAILED.code,
+      error.code,
+      error.message,
+      { roomId },
+    );
     redirect(`/rooms/${roomId}?error=leave_failed`);
   }
 

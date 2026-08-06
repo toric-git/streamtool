@@ -1,4 +1,6 @@
-export function mapAuthError(message: string): string {
+import { E, type AppError, withMessage } from "@/lib/errors/catalog";
+
+export function mapAuthError(message: string): AppError {
   const lower = message.toLowerCase();
   if (
     lower.includes("fetch failed") ||
@@ -12,100 +14,101 @@ export function mapAuthError(message: string): string {
     lower.includes("enotfound") ||
     lower.includes("econnreset")
   ) {
-    return "Supabase に接続できませんでした。本番URLで試すか、Norton の HTTPS スキャンをオフにしてからローカルを再起動してください。";
+    return E.AUTH_CONNECTION;
   }
   if (lower.includes("email_address_invalid") || lower.includes("email address")) {
-    return "このメールアドレスは使えません。Gmail など実在する形式のアドレスを使ってください。";
+    return E.AUTH_EMAIL_INVALID;
   }
   if (lower.includes("invalid login") || lower.includes("invalid_credentials")) {
-    return "メールアドレスまたはパスワードが正しくありません。";
+    return E.AUTH_INVALID_CREDENTIALS;
   }
   if (
     lower.includes("already registered") ||
     lower.includes("already been registered") ||
     lower.includes("user_already_exists")
   ) {
-    return "このメールアドレスは既に登録されています。ログインしてください。";
+    return E.AUTH_ALREADY_REGISTERED;
   }
   if (lower.includes("email not confirmed") || lower.includes("email_not_confirmed")) {
-    return "メールアドレスの確認が完了していません。受信トレイを確認するか、Supabase で Confirm email をオフにしてください。";
+    return E.AUTH_EMAIL_NOT_CONFIRMED;
   }
   if (lower.includes("provider is not enabled") || lower.includes("validation_failed")) {
-    return "このログイン方法は有効になっていません。Supabase の Providers 設定を確認してください。";
+    return E.AUTH_PROVIDER_DISABLED;
   }
   if (lower.includes("rate limit") || lower.includes("over_request")) {
-    return "しばらく待ってから再度お試しください。";
+    return E.AUTH_RATE_LIMIT;
   }
-  return "認証に失敗しました。入力内容を確認して再度お試しください。";
+  return E.AUTH_FAILED;
 }
 
-export function mapRoomJoinError(message: string): string {
+export function mapRoomJoinError(message: string): AppError {
   const lower = message.toLowerCase();
   if (lower.includes("room not found") || lower.includes("p0002")) {
-    return "部屋が見つかりません。ルームコードを確認してください。";
+    return withMessage(E.ROOM_JOIN_INVALID_CODE, "部屋が見つかりません。ルームコードを確認してください。");
   }
   if (lower.includes("password")) {
-    return "参加パスワードが違うか、パスワード付きの部屋です。";
+    return withMessage(
+      E.ROOM_JOIN_PASSWORD_WRONG,
+      "参加パスワードが違うか、パスワード付きの部屋です。",
+    );
   }
   if (lower.includes("full")) {
-    return "部屋が満員です。空きが出てから再度お試しください。";
+    return E.ROOM_JOIN_FULL;
   }
   if (lower.includes("guest")) {
-    return "この部屋はゲスト参加が許可されていません。ログインして参加してください。";
+    return E.ROOM_JOIN_GUEST_DISABLED;
   }
   if (lower.includes("not authenticated")) {
-    return "参加するにはログインまたはゲスト認証が必要です。";
+    return E.ROOM_JOIN_NOT_AUTHENTICATED;
   }
-  return "部屋への参加に失敗しました。入力内容を確認して再度お試しください。";
+  return E.ROOM_JOIN_FAILED;
 }
 
-export function mapMemberError(message: string): string {
+export function mapMemberError(message: string): AppError {
   const lower = message.toLowerCase();
   if (lower.includes("permission denied")) {
-    return "この操作を行う権限がありません。";
+    return E.MEMBER_PERMISSION;
   }
   if (lower.includes("cannot kick owner") || lower.includes("cannot change owner")) {
-    return "オーナーに対してこの操作はできません。";
+    return E.MEMBER_OWNER_PROTECTED;
   }
   if (lower.includes("cannot kick yourself") || lower.includes("cannot change own")) {
-    return "自分自身には実行できません。";
+    return E.MEMBER_SELF_FORBIDDEN;
   }
   if (lower.includes("member not found")) {
-    return "対象のメンバーが見つかりません。既に退出している可能性があります。";
+    return E.MEMBER_NOT_FOUND;
   }
   if (lower.includes("invalid role")) {
-    return "指定された役割が不正です。";
+    return E.MEMBER_INVALID_ROLE;
   }
   if (lower.includes("guest")) {
-    return "ゲストには所有権を移譲できません。";
+    return E.MEMBER_GUEST_TRANSFER;
   }
   if (lower.includes("already owner")) {
-    return "すでにオーナーです。";
+    return E.MEMBER_ALREADY_OWNER;
   }
-  return "メンバー操作に失敗しました。権限と対象を確認して再試行してください。";
+  return E.MEMBER_FAILED;
 }
 
-export function mapPlaybackError(message: string): string {
+export function mapPlaybackError(message: string): AppError {
   const lower = message.toLowerCase();
   if (lower.includes("cooldown")) {
-    return "クールダウン中です。連打を控えてください。";
+    return E.PLAY_COOLDOWN;
   }
   if (lower.includes("rate limit")) {
-    return "送信回数の上限に達しました。1分ほど待ってください。";
+    return E.PLAY_RATE_LIMIT;
   }
   if (lower.includes("denied") || lower.includes("permission")) {
-    return "再生が拒否されました。権限またはミュート状態を確認してください。";
+    return E.PLAY_DENIED;
   }
-  return "再生イベントの送信に失敗しました。";
+  return E.PLAY_FAILED;
 }
 
-export function mapRoomPageError(code: string | undefined): string | null {
+export function mapRoomPageError(
+  code: string | undefined,
+): AppError | null {
   if (!code) return null;
-  if (code === "owner_leave") {
-    return "オーナーは退出できません。所有権を移譲するか、部屋を削除してください。";
-  }
-  if (code === "leave_failed") {
-    return "退出に失敗しました。通信状態を確認して再試行してください。";
-  }
-  return "操作に失敗しました。";
+  if (code === "owner_leave") return E.ROOM_OWNER_LEAVE;
+  if (code === "leave_failed") return E.ROOM_LEAVE_FAILED;
+  return withMessage(E.UNKNOWN, "操作に失敗しました。");
 }

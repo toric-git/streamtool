@@ -1,12 +1,14 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { E, type ErrorCode } from "@/lib/errors/catalog";
 import { mapAuthError } from "@/lib/errors/messages";
 import { createClient } from "@/lib/supabase/server";
 import { loginSchema, signupSchema } from "@/lib/validation/schemas";
 
 export type AuthActionState = {
   error: string | null;
+  code: ErrorCode | null;
   success?: string | null;
 };
 
@@ -20,24 +22,27 @@ export async function signInWithEmail(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容が正しくありません" };
+    return {
+      error: parsed.error.issues[0]?.message ?? E.VALIDATION.message,
+      code: E.VALIDATION.code,
+    };
   }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
 
   if (error) {
+    const mapped = mapAuthError(
+      `${error.name} ${error.message} ${error.code ?? ""}`,
+    );
     console.error(
-      "[auth] signInWithEmail failed",
+      "[auth]",
+      mapped.code,
       error.name,
       error.message,
       error.code,
     );
-    return {
-      error: mapAuthError(
-        `${error.name} ${error.message} ${error.code ?? ""}`,
-      ),
-    };
+    return { error: mapped.message, code: mapped.code };
   }
 
   const next = String(formData.get("next") || "/dashboard");
@@ -55,7 +60,10 @@ export async function signUpWithEmail(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "入力内容が正しくありません" };
+    return {
+      error: parsed.error.issues[0]?.message ?? E.VALIDATION.message,
+      code: E.VALIDATION.code,
+    };
   }
 
   const supabase = await createClient();
@@ -70,17 +78,17 @@ export async function signUpWithEmail(
   });
 
   if (error) {
+    const mapped = mapAuthError(
+      `${error.name} ${error.message} ${error.code ?? ""}`,
+    );
     console.error(
-      "[auth] signUpWithEmail failed",
+      "[auth]",
+      mapped.code,
       error.name,
       error.message,
       error.code,
     );
-    return {
-      error: mapAuthError(
-        `${error.name} ${error.message} ${error.code ?? ""}`,
-      ),
-    };
+    return { error: mapped.message, code: mapped.code };
   }
 
   if (data.session) {
@@ -89,6 +97,7 @@ export async function signUpWithEmail(
 
   return {
     error: null,
+    code: null,
     success:
       "確認メールを送信しました。メール内のリンクを開いてからログインしてください。",
   };

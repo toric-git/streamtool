@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { STORAGE_BUCKETS } from "@/lib/app-config";
-import { actionFail, actionOk, type ActionResult } from "@/lib/actions/result";
+import {
+  actionFail,
+  actionFailFrom,
+  actionOk,
+  type ActionResult,
+} from "@/lib/actions/result";
+import { E, withMessage } from "@/lib/errors/catalog";
 import { verifyStoredAudio, verifyStoredImage } from "@/lib/media/verify-stored";
 import { isOwnerOrAdmin } from "@/lib/permissions/room-permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -41,11 +47,16 @@ export async function createSound(
 ): Promise<ActionResult<{ soundId: string }>> {
   const parsed = createSoundSchema.safeParse(input);
   if (!parsed.success) {
-    return actionFail(parsed.error.issues[0]?.message ?? "入力が不正です");
+    return actionFail(
+      withMessage(
+        E.VALIDATION,
+        parsed.error.issues[0]?.message ?? E.VALIDATION.message,
+      ),
+    );
   }
 
   const actor = await requireRoomActor(parsed.data.roomId);
-  if (!actor.ok) return actionFail(actor.error);
+  if (!actor.ok) return actionFailFrom(actor);
 
   const { data: room } = await actor.supabase
     .from("rooms")
@@ -53,15 +64,15 @@ export async function createSound(
     .eq("id", parsed.data.roomId)
     .maybeSingle();
 
-  if (!room) return actionFail("部屋が見つかりません。");
+  if (!room) return actionFail(E.ROOM_NOT_FOUND);
 
   const adminRole = isOwnerOrAdmin(actor.membership.role);
   if (!adminRole && (!room.upload_enabled || !actor.membership.can_upload)) {
-    return actionFail("アップロードが許可されていません。");
+    return actionFail(E.SOUND_UPLOAD_DISABLED);
   }
 
   if (!parsed.data.audioPath.startsWith(`${parsed.data.roomId}/`)) {
-    return actionFail("音声パスが不正です。");
+    return actionFail(E.SOUND_AUDIO_PATH_INVALID);
   }
 
   const audioVerify = await verifyStoredAudio({
@@ -72,7 +83,7 @@ export async function createSound(
 
   if (parsed.data.imagePath) {
     if (!parsed.data.imagePath.startsWith(`${parsed.data.roomId}/`)) {
-      return actionFail("画像パスが不正です。");
+      return actionFail(E.SOUND_IMAGE_PATH_INVALID);
     }
     const imageVerify = await verifyStoredImage({ path: parsed.data.imagePath });
     if (!imageVerify.ok) return actionFail(imageVerify.error);
@@ -111,10 +122,13 @@ export async function createSound(
     .single();
 
   if (error || !data) {
-    console.error("[sounds] create failed", error?.code);
-    return actionFail(
-      "サウンドの登録に失敗しました。ファイルはアップロード済みの可能性があります。再試行するか管理者に連絡してください。",
+    console.error(
+      "[sounds]",
+      E.SOUND_CREATE_FAILED.code,
+      error?.code,
+      error?.message,
     );
+    return actionFail(E.SOUND_CREATE_FAILED);
   }
 
   revalidateSounds(parsed.data.roomId);
@@ -126,7 +140,7 @@ export async function updateSoundMeta(
   formData: FormData,
 ): Promise<ActionResult> {
   const { supabase, user } = await getSessionUser();
-  if (!user) return actionFail("ログインが必要です。");
+  if (!user) return actionFail(E.AUTH_REQUIRED);
 
   const { data: sound } = await supabase
     .from("sounds")
@@ -134,17 +148,17 @@ export async function updateSoundMeta(
     .eq("id", soundId)
     .maybeSingle();
 
-  if (!sound) return actionFail("サウンドが見つかりません。");
+  if (!sound) return actionFail(E.SOUND_NOT_FOUND);
 
   const actor = await requireRoomActor(sound.room_id);
-  if (!actor.ok) return actionFail(actor.error);
+  if (!actor.ok) return actionFailFrom(actor);
 
   const adminRole = isOwnerOrAdmin(actor.membership.role);
   if (
     !adminRole &&
     !(sound.uploader_id === user.id && sound.approval_status === "pending")
   ) {
-    return actionFail("編集権限がありません。");
+    return actionFail(E.SOUND_EDIT_FORBIDDEN);
   }
 
   const parsed = z
@@ -168,7 +182,12 @@ export async function updateSoundMeta(
     });
 
   if (!parsed.success) {
-    return actionFail(parsed.error.issues[0]?.message ?? "入力が不正です");
+    return actionFail(
+      withMessage(
+        E.VALIDATION,
+        parsed.error.issues[0]?.message ?? E.VALIDATION.message,
+      ),
+    );
   }
 
   const { error } = await supabase
@@ -185,8 +204,13 @@ export async function updateSoundMeta(
     .eq("id", soundId);
 
   if (error) {
-    console.error("[sounds] update failed", error.code);
-    return actionFail("更新に失敗しました。");
+    console.error(
+      "[sounds]",
+      E.SOUND_UPDATE_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.SOUND_UPDATE_FAILED);
   }
 
   revalidateSounds(sound.room_id);
@@ -195,7 +219,7 @@ export async function updateSoundMeta(
 
 export async function deleteSound(soundId: string): Promise<ActionResult> {
   const { supabase, user } = await getSessionUser();
-  if (!user) return actionFail("ログインが必要です。");
+  if (!user) return actionFail(E.AUTH_REQUIRED);
 
   const { data: sound } = await supabase
     .from("sounds")
@@ -203,23 +227,28 @@ export async function deleteSound(soundId: string): Promise<ActionResult> {
     .eq("id", soundId)
     .maybeSingle();
 
-  if (!sound) return actionFail("サウンドが見つかりません。");
+  if (!sound) return actionFail(E.SOUND_NOT_FOUND);
 
   const actor = await requireRoomActor(sound.room_id);
-  if (!actor.ok) return actionFail(actor.error);
+  if (!actor.ok) return actionFailFrom(actor);
 
   const adminRole = isOwnerOrAdmin(actor.membership.role);
   if (
     !adminRole &&
     !(sound.uploader_id === user.id && sound.approval_status === "pending")
   ) {
-    return actionFail("削除権限がありません。");
+    return actionFail(E.SOUND_DELETE_FORBIDDEN);
   }
 
   const { error } = await supabase.from("sounds").delete().eq("id", soundId);
   if (error) {
-    console.error("[sounds] delete db failed", error.code);
-    return actionFail("削除に失敗しました。再試行してください。");
+    console.error(
+      "[sounds]",
+      E.SOUND_DELETE_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.SOUND_DELETE_FAILED);
   }
 
   try {
@@ -235,13 +264,12 @@ export async function deleteSound(soundId: string): Promise<ActionResult> {
     await Promise.all(removals);
   } catch (err) {
     console.error(
-      "[sounds] storage cleanup failed",
+      "[sounds]",
+      E.SOUND_STORAGE_CLEANUP.code,
       err instanceof Error ? err.name : "unknown",
     );
     revalidatePath(`/rooms/${sound.room_id}/sounds`);
-    return actionFail(
-      "データベース上の削除は成功しましたが、ファイル削除に失敗しました。時間をおいて再試行するか管理者に連絡してください。",
-    );
+    return actionFail(E.SOUND_STORAGE_CLEANUP);
   }
 
   revalidateSounds(sound.room_id);
@@ -252,8 +280,13 @@ export async function approveSoundAction(soundId: string): Promise<ActionResult>
   const { supabase } = await getSessionUser();
   const { error } = await supabase.rpc("approve_sound", { p_sound_id: soundId });
   if (error) {
-    console.error("[sounds] approve failed", error.code);
-    return actionFail("承認に失敗しました。権限を確認してください。");
+    console.error(
+      "[sounds]",
+      E.SOUND_APPROVE_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.SOUND_APPROVE_FAILED);
   }
   revalidatePath("/rooms");
   return actionOk();
@@ -261,7 +294,7 @@ export async function approveSoundAction(soundId: string): Promise<ActionResult>
 
 export async function rejectSoundAction(soundId: string): Promise<ActionResult> {
   const { supabase, user } = await getSessionUser();
-  if (!user) return actionFail("ログインが必要です。");
+  if (!user) return actionFail(E.AUTH_REQUIRED);
 
   const { data: sound } = await supabase
     .from("sounds")
@@ -269,12 +302,17 @@ export async function rejectSoundAction(soundId: string): Promise<ActionResult> 
     .eq("id", soundId)
     .maybeSingle();
 
-  if (!sound) return actionFail("サウンドが見つかりません。");
+  if (!sound) return actionFail(E.SOUND_NOT_FOUND);
 
   const { error } = await supabase.rpc("reject_sound", { p_sound_id: soundId });
   if (error) {
-    console.error("[sounds] reject failed", error.code);
-    return actionFail("却下に失敗しました。権限を確認してください。");
+    console.error(
+      "[sounds]",
+      E.SOUND_REJECT_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.SOUND_REJECT_FAILED);
   }
 
   try {
@@ -285,7 +323,8 @@ export async function rejectSoundAction(soundId: string): Promise<ActionResult> 
     }
   } catch (err) {
     console.error(
-      "[sounds] reject storage cleanup failed",
+      "[sounds]",
+      E.SOUND_STORAGE_CLEANUP.code,
       err instanceof Error ? err.name : "unknown",
     );
   }
@@ -299,15 +338,20 @@ export async function reorderSoundsAction(
   soundIds: string[],
 ): Promise<ActionResult> {
   const actor = await requireRoomActor(roomId);
-  if (!actor.ok) return actionFail(actor.error);
+  if (!actor.ok) return actionFailFrom(actor);
 
   const { error } = await actor.supabase.rpc("reorder_sounds", {
     p_room_id: roomId,
     p_sound_ids: soundIds,
   });
   if (error) {
-    console.error("[sounds] reorder failed", error.code);
-    return actionFail("並び替えに失敗しました。");
+    console.error(
+      "[sounds]",
+      E.SOUND_REORDER_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.SOUND_REORDER_FAILED);
   }
   revalidateSounds(roomId);
   return actionOk();

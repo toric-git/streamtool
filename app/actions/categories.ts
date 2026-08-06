@@ -1,7 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { actionFail, actionOk, type ActionResult } from "@/lib/actions/result";
+import {
+  actionFail,
+  actionFailFrom,
+  actionOk,
+  type ActionResult,
+} from "@/lib/actions/result";
+import { E } from "@/lib/errors/catalog";
 import { isOwnerOrAdmin } from "@/lib/permissions/room-permissions";
 import { requireRoomActor } from "@/lib/supabase/auth-context";
 
@@ -11,14 +17,14 @@ export async function createCategory(
   color?: string | null,
 ): Promise<ActionResult> {
   const actor = await requireRoomActor(roomId);
-  if (!actor.ok) return actionFail(actor.error);
+  if (!actor.ok) return actionFailFrom(actor);
   if (!isOwnerOrAdmin(actor.membership.role)) {
-    return actionFail("カテゴリー作成権限がありません。");
+    return actionFail(E.CATEGORY_FORBIDDEN);
   }
 
   const trimmed = name.trim();
   if (!trimmed || trimmed.length > 40) {
-    return actionFail("カテゴリー名が不正です。");
+    return actionFail(E.CATEGORY_NAME_INVALID);
   }
 
   const { error } = await actor.supabase.from("sound_categories").insert({
@@ -28,8 +34,13 @@ export async function createCategory(
   });
 
   if (error) {
-    console.error("[categories] create failed", error.code);
-    return actionFail("カテゴリーの作成に失敗しました。");
+    console.error(
+      "[categories]",
+      E.CATEGORY_CREATE_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.CATEGORY_CREATE_FAILED);
   }
 
   revalidatePath(`/rooms/${roomId}/sounds`);

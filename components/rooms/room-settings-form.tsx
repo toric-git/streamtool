@@ -3,9 +3,11 @@
 import { useState, useTransition } from "react";
 import { deleteRoom, updateRoom } from "@/app/actions/rooms";
 import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { E, type AppError } from "@/lib/errors/catalog";
 import type { Tables } from "@/types/database";
 
 export function RoomSettingsForm({
@@ -30,14 +32,14 @@ export function RoomSettingsForm({
   > & { has_password: boolean };
   role: string;
 }) {
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const canEdit = role === "owner" || role === "admin";
   const isOwner = role === "owner";
 
   if (!canEdit) {
-    return <Alert>部屋設定を変更する権限がありません。</Alert>;
+    return <ErrorAlert error={E.ROOM_UPDATE_FORBIDDEN} />;
   }
 
   return (
@@ -51,12 +53,15 @@ export function RoomSettingsForm({
           setSuccess(null);
           startTransition(async () => {
             const result = await updateRoom(room.id, formData);
-            if (!result.ok) setError(result.error);
-            else setSuccess("設定を保存しました。");
+            if (!result.ok) {
+              setError({ code: result.code, message: result.error });
+            } else {
+              setSuccess("設定を保存しました。");
+            }
           });
         }}
       >
-        {error && <Alert variant="destructive">{error}</Alert>}
+        {error && <ErrorAlert error={error} />}
         {success && <Alert>{success}</Alert>}
 
         <div className="space-y-2">
@@ -212,7 +217,9 @@ export function RoomSettingsForm({
             setError(null);
             startTransition(async () => {
               const result = await deleteRoom(room.id);
-              if (result && "ok" in result && !result.ok) setError(result.error);
+              if (result && "ok" in result && !result.ok) {
+                setError({ code: result.code, message: result.error });
+              }
             });
           }}
         >

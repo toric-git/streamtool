@@ -5,9 +5,11 @@ import { issueObsToken } from "@/app/actions/obs";
 import { createClient } from "@/lib/supabase/client";
 import { randomUUID } from "@/lib/crypto/random-uuid";
 import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { E, type AppError } from "@/lib/errors/catalog";
 
 type TokenMeta = {
   id: string;
@@ -24,7 +26,7 @@ export function ObsSetupDialog({
   roomId: string;
   tokens: TokenMeta[];
 }) {
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [issued, setIssued] = useState<{ url: string; plainToken: string } | null>(
     null,
   );
@@ -40,7 +42,7 @@ export function ObsSetupDialog({
         </p>
       </div>
 
-      {error && <Alert variant="destructive">{error}</Alert>}
+      {error && <ErrorAlert error={error} />}
       {testMessage && <Alert>{testMessage}</Alert>}
 
       {issued && (
@@ -75,7 +77,11 @@ export function ObsSetupDialog({
             startTransition(async () => {
               const result = await issueObsToken(roomId);
               if (!result.ok || !result.data) {
-                setError(result.ok ? "発行結果が不正です。" : result.error);
+                setError(
+                  result.ok
+                    ? E.OBS_ISSUE_INVALID
+                    : { code: result.code, message: result.error },
+                );
                 return;
               }
               setIssued({
@@ -105,7 +111,7 @@ export function ObsSetupDialog({
                 .limit(1);
               const soundId = sounds?.[0]?.id;
               if (!soundId) {
-                setError("テスト再生する承認済みサウンドがありません。");
+                setError(E.PLAY_TEST_NO_SOUND);
                 return;
               }
               const { error: playError } = await supabase.rpc("create_playback_event", {
@@ -116,7 +122,7 @@ export function ObsSetupDialog({
                 p_client_event_id: randomUUID(),
               });
               if (playError) {
-                setError("テスト再生の送信に失敗しました。");
+                setError(E.PLAY_TEST_FAILED);
                 return;
               }
               setTestMessage("テスト再生イベントを送信しました。OBSでも鳴るか確認してください。");
