@@ -30,7 +30,7 @@ const createSoundSchema = z.object({
   audioPath: z.string().min(1),
   imagePath: z.string().min(1).optional().nullable(),
   categoryId: z.string().uuid().optional().nullable(),
-  buttonColor: hexColorSchema.default("#ff6b9d"),
+  buttonColor: hexColorSchema.default("#FF8FB1"),
   textColor: hexColorSchema.default("#ffffff"),
   volume: volumeSchema.default(1),
   cooldownMs: z.number().int().min(0).max(60_000).default(1000),
@@ -180,6 +180,56 @@ export async function updateSoundVolume(
   const { error } = await supabase
     .from("sounds")
     .update({ volume: parsed.data })
+    .eq("id", soundId);
+
+  if (error) {
+    console.error(
+      "[sounds]",
+      E.SOUND_UPDATE_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.SOUND_UPDATE_FAILED);
+  }
+
+  revalidateSounds(sound.room_id);
+  return actionOk();
+}
+
+export async function renameSound(
+  soundId: string,
+  name: string,
+): Promise<ActionResult> {
+  const parsed = soundNameSchema.safeParse(name);
+  if (!parsed.success) {
+    return actionFail(
+      withMessage(
+        E.VALIDATION,
+        parsed.error.issues[0]?.message ?? E.VALIDATION.message,
+      ),
+    );
+  }
+
+  const { supabase, user } = await getSessionUser();
+  if (!user) return actionFail(E.AUTH_REQUIRED);
+
+  const { data: sound } = await supabase
+    .from("sounds")
+    .select("id, room_id")
+    .eq("id", soundId)
+    .maybeSingle();
+
+  if (!sound) return actionFail(E.SOUND_NOT_FOUND);
+
+  const actor = await requireRoomActor(sound.room_id);
+  if (!actor.ok) return actionFailFrom(actor);
+  if (!isOwnerOrAdmin(actor.membership.role)) {
+    return actionFail(E.SOUND_EDIT_FORBIDDEN);
+  }
+
+  const { error } = await supabase
+    .from("sounds")
+    .update({ name: parsed.data })
     .eq("id", soundId);
 
   if (error) {

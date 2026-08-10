@@ -143,5 +143,15 @@ export function useLiveBoardCatalog(
     [categories],
   );
 
-  return { sounds, categories: sortedCategories };
+  function upsertCategory(category: LiveCategory) {
+    setCategories((prev) => {
+      const idx = prev.findIndex((c) => c.id === category.id);
+      if (idx === -1) return [...prev, category];
+      const next = [...prev];
+      next[idx] = { ...prev[idx], ...category };
+      return next;
+    });
+  }
+
+  return { sounds, categories: sortedCategories, upsertCategory };
 }

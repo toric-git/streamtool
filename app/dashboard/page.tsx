@@ -87,9 +87,6 @@ export default async function DashboardPage() {
           <Button asChild className="font-bold shadow-none">
             <Link href="/rooms/new">部屋を作成</Link>
           </Button>
-          <Button asChild variant="secondary" className="font-bold shadow-none">
-            <Link href="/">ハブへ</Link>
-          </Button>
           <form action={signOut}>
             <Button type="submit" variant="outline" className="font-bold">
               ログアウト

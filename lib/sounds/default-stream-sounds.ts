@@ -1,6 +1,7 @@
+import { cuteColorAt } from "@/lib/sounds/button-colors";
+
 /**
  * Starter stream SFX pack seeded into new rooms (exactly 4 pads).
- * Owners can add more or delete these from サウンド管理.
  * Source files live in `lib/sounds/default-assets/`.
  */
 export type DefaultStreamSound = {
@@ -15,7 +16,7 @@ export type DefaultStreamSound = {
 
 export const DEFAULT_STREAM_CATEGORY = {
   name: "配信",
-  color: "#ec4899",
+  color: "#FF8FB1",
 } as const;
 
 /** Order = board sort_order / pad hotkeys 1 2 3 Q */
@@ -23,26 +24,26 @@ export const DEFAULT_STREAM_SOUNDS: readonly DefaultStreamSound[] = [
   {
     file: "seikai.mp3",
     name: "正解",
-    buttonColor: "#5eead4", // mint
-    textColor: "#0f766e",
+    buttonColor: cuteColorAt(4).hex, // ミント
+    textColor: cuteColorAt(4).text,
   },
   {
     file: "hazure.mp3",
     name: "ハズレ",
-    buttonColor: "#fda4af", // soft rose
-    textColor: "#9f1239",
+    buttonColor: cuteColorAt(11).hex, // さくら
+    textColor: cuteColorAt(11).text,
   },
   {
     file: "dodon.mp3",
     name: "ドドン",
-    buttonColor: "#ff6b9d", // candy coral
-    textColor: "#ffffff",
+    buttonColor: cuteColorAt(0).hex, // いちごミルク
+    textColor: cuteColorAt(0).text,
   },
   {
     file: "fanfare.mp3",
     name: "ファンファーレ",
-    buttonColor: "#fbbf24", // lemon gold
-    textColor: "#92400e",
+    buttonColor: cuteColorAt(3).hex, // レモン
+    textColor: cuteColorAt(3).text,
   },
 ] as const;
 

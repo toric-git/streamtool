@@ -51,16 +51,24 @@ export function useRealtimeRoom({
   const [playingIds, setPlayingIds] = useState<string[]>([]);
   const [lastError, setLastError] = useState<AppError | null>(null);
   const [history, setHistory] = useState<PlaybackEventPayload[]>([]);
+  const [preloadState, setPreloadState] = useState<
+    "idle" | "loading" | "done"
+  >("idle");
 
   const seenIdsRef = useRef(new Set<string>());
   const engineRef = useRef<AudioEngineLike | null>(null);
   const soundsRef = useRef(sounds);
   const memberNamesRef = useRef(memberNames);
   const volumeLayersRef = useRef({ roomVolume, deviceOrObsVolume });
+  const soundIdsKey = sounds.map((s) => s.id).join(",");
 
   useEffect(() => {
     soundsRef.current = sounds;
   }, [sounds]);
+
+  useEffect(() => {
+    setPreloadState("idle");
+  }, [soundIdsKey]);
 
   useEffect(() => {
     memberNamesRef.current = memberNames;
@@ -103,7 +111,7 @@ export function useRealtimeRoom({
   }, [roomVolume, deviceOrObsVolume]);
 
   useEffect(() => {
-    if (!enabled || !audioUnlocked) return;
+    if (!enabled) return;
 
     let cancelled = false;
     const channel = supabase
@@ -157,6 +165,11 @@ export function useRealtimeRoom({
           onEvent?.(event);
           setHistory((prev) => [event, ...prev].slice(0, REALTIME_LIMITS.historyLimit));
 
+          // Audio playback needs a prior user gesture; history still updates.
+          if (!engineRef.current?.isUnlocked()) {
+            return;
+          }
+
           try {
             if (event.action === "stop_all") {
               engineRef.current?.stopAll();
@@ -201,16 +214,7 @@ export function useRealtimeRoom({
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [supabase, roomId, enabled, audioUnlocked, onEvent]);
-
-  // Prefetch visible sounds after unlock
-  useEffect(() => {
-    if (!audioUnlocked || !enabled) return;
-    const top = sounds.slice(0, 12);
-    void Promise.allSettled(
-      top.map((s) => engineRef.current?.preload(s.id, s.audio_path)),
-    );
-  }, [audioUnlocked, enabled, sounds]);
+  }, [supabase, roomId, enabled, onEvent]);
 
   async function unlockAudio() {
     const engine = engineRef.current;
@@ -228,10 +232,32 @@ export function useRealtimeRoom({
     return ok;
   }
 
+  async function preloadAll(): Promise<boolean> {
+    const engine = engineRef.current;
+    if (!engine || !audioUnlocked) {
+      setLastError(E.AUDIO_ENGINE_NOT_READY);
+      return false;
+    }
+    setPreloadState("loading");
+    setLastError(null);
+    const results = await Promise.allSettled(
+      soundsRef.current.map((s) => engine.preload(s.id, s.audio_path)),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    setPreloadState(failed === results.length && results.length > 0 ? "idle" : "done");
+    if (failed > 0 && failed === results.length) {
+      setLastError(E.AUDIO_PLAYBACK_FAILED);
+      return false;
+    }
+    return true;
+  }
+
   return {
     connectionStatus,
     audioUnlocked,
     unlockAudio,
+    preloadAll,
+    preloadState,
     playingIds,
     lastError,
     history,

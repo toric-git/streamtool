@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useId, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { SoundButton } from "@/components/soundboard/sound-button";
 import { VolumeSlider } from "@/components/soundboard/volume-slider";
 import { SoundUploadForm } from "@/components/sounds/sound-upload-form";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   hotkeyForIndex,
   indexForHotkey,
   matchPadHotkey,
 } from "@/lib/sounds/pad-hotkeys";
 import { cn } from "@/lib/utils";
+
+type PreloadState = "idle" | "loading" | "done";
 
 export type BoardSound = {
   id: string;
@@ -26,8 +29,6 @@ export type BoardSound = {
   playback_mode?: "one_shot" | "toggle_loop";
   sort_order?: number;
 };
-
-const MIN_PAD_SLOTS = 9;
 
 function TrashIcon({ className }: { className?: string }) {
   return (
@@ -67,6 +68,24 @@ function PlusIcon({ className }: { className?: string }) {
   );
 }
 
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
 export function SoundGrid({
   roomId,
   categories,
@@ -84,8 +103,11 @@ export function SoundGrid({
   onStop,
   onToggleFavorite,
   onDelete,
+  onRename,
   onVolumeChange,
   onVolumeCommit,
+  onPreloadAll,
+  preloadState = "idle",
   defaultCategoryId = "",
   showAddSlots = true,
 }: {
@@ -105,8 +127,11 @@ export function SoundGrid({
   onStop?: (sound: BoardSound) => void;
   onToggleFavorite: (soundId: string) => void;
   onDelete?: (soundId: string) => Promise<boolean>;
+  onRename?: (soundId: string, name: string) => Promise<boolean>;
   onVolumeChange?: (soundId: string, volume: number) => void;
   onVolumeCommit?: (soundId: string, volume: number) => void;
+  onPreloadAll?: () => void;
+  preloadState?: PreloadState;
   defaultCategoryId?: string;
   /** When false (e.g. favorites filter), hide empty + pads. */
   showAddSlots?: boolean;
@@ -115,8 +140,44 @@ export function SoundGrid({
   const titleId = useId();
   const [addOpen, setAddOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const skipRenameBlurRef = useRef(false);
   const [pending, startTransition] = useTransition();
   const allowAdd = canUpload && showAddSlots;
+  const canEdit = Boolean(onDelete || onRename);
+
+  function startRename(sound: BoardSound) {
+    if (!onRename) return;
+    skipRenameBlurRef.current = false;
+    setRenamingId(sound.id);
+    setRenameDraft(sound.name);
+  }
+
+  function cancelRename() {
+    skipRenameBlurRef.current = true;
+    setRenamingId(null);
+  }
+
+  function commitRename(soundId: string) {
+    if (skipRenameBlurRef.current) {
+      skipRenameBlurRef.current = false;
+      return;
+    }
+    if (!onRename) {
+      setRenamingId(null);
+      return;
+    }
+    const next = renameDraft.trim();
+    const current = sounds.find((s) => s.id === soundId);
+    setRenamingId(null);
+    if (!next || !current || current.name === next) return;
+
+    startTransition(async () => {
+      const ok = await onRename(soundId, next);
+      if (ok) router.refresh();
+    });
+  }
 
   useEffect(() => {
     const held = new Set<string>();
@@ -185,9 +246,8 @@ export function SoundGrid({
     return () => window.removeEventListener("keydown", onEscape);
   }, [addOpen]);
 
-  const emptySlotCount = allowAdd
-    ? Math.max(1, MIN_PAD_SLOTS - sounds.length)
-    : 0;
+  // One colorless "+" pad at the end of the row (not a full empty grid).
+  const emptySlotCount = allowAdd ? 1 : 0;
   const totalSlots = sounds.length + emptySlotCount;
 
   if (sounds.length === 0 && !allowAdd) {
@@ -220,10 +280,26 @@ export function SoundGrid({
           </p>
           <p className="text-xs font-bold text-muted-foreground">
             キー 1 2 3 / Q W E / A S D でも再生できます
-            {allowAdd ? " · 空欄の＋で追加" : ""}
+            {allowAdd ? " · 末尾の＋で追加" : ""}
             {canDelete ? " · ゴミ箱で削除" : ""}
+            {onRename ? " · 鉛筆で改名" : ""}
           </p>
         </div>
+        {onPreloadAll && sounds.length > 0 && (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={preloadState === "loading"}
+            onClick={onPreloadAll}
+          >
+            {preloadState === "loading"
+              ? "読み込み中…"
+              : preloadState === "done"
+                ? "読み込み済み"
+                : "全てを読み込む"}
+          </Button>
+        )}
       </div>
 
       <div
@@ -243,8 +319,8 @@ export function SoundGrid({
                 disabled={!allowAdd}
                 onClick={() => setAddOpen(true)}
                 className={cn(
-                  "group relative flex aspect-square w-full min-h-[7.5rem] flex-col items-center justify-center gap-2 rounded-[1.35rem] border-2 border-dashed border-[var(--hub-coral)]/40 bg-white/70 px-3 text-[var(--hub-coral)] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] transition",
-                  "hover:-translate-y-0.5 hover:border-[var(--hub-coral)] hover:bg-[linear-gradient(160deg,#fff7fb,#eef9ff)]",
+                  "group relative flex aspect-square w-full min-h-[7.5rem] flex-col items-center justify-center gap-2 rounded-[1.35rem] border-2 border-dashed border-slate-300/80 bg-transparent px-3 text-slate-500 transition",
+                  "hover:-translate-y-0.5 hover:border-slate-400 hover:bg-white/50 hover:text-slate-700",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   "disabled:opacity-50",
                 )}
@@ -255,14 +331,11 @@ export function SoundGrid({
                 }
               >
                 {hotkey ? (
-                  <span className="absolute left-3 top-2.5 font-display text-2xl font-semibold tracking-tight text-muted-foreground/50">
+                  <span className="absolute left-3 top-2.5 font-display text-2xl font-semibold tracking-tight text-muted-foreground/40">
                     {hotkey}
                   </span>
                 ) : null}
-                <span className="flex size-12 items-center justify-center rounded-full bg-[var(--hub-coral)]/10 transition group-hover:bg-[var(--hub-coral)]/15">
-                  <PlusIcon className="size-7" />
-                </span>
-                <span className="text-sm font-extrabold">追加</span>
+                <PlusIcon className="size-10 stroke-[2]" />
               </button>
             );
           }
@@ -279,6 +352,8 @@ export function SoundGrid({
                 : "idle";
           const fav = isFavorite(sound.id);
           const busyDelete = pending && deletingId === sound.id;
+          const busyRename = pending && renamingId === sound.id;
+          const isRenaming = renamingId === sound.id;
 
           return (
             <div key={sound.id} className="space-y-1.5">
@@ -300,37 +375,60 @@ export function SoundGrid({
                       : 0
                   }
                   disabled={
-                    !canPlay || busyDelete || (!holdMode && cooling)
+                    !canPlay ||
+                    busyDelete ||
+                    busyRename ||
+                    isRenaming ||
+                    (!holdMode && cooling)
                   }
                   holdMode={holdMode}
                   onPress={() => onPlay(sound)}
                   onPressEnd={() => onStop?.(sound)}
                 />
-                {canDelete && onDelete && (
-                  <button
-                    type="button"
-                    className="absolute left-1.5 top-1.5 z-20 flex size-8 items-center justify-center rounded-full bg-white/80 text-rose-600 shadow-sm backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                    aria-label={`${sound.name}を削除`}
-                    disabled={busyDelete}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (
-                        !window.confirm(
-                          `「${sound.name}」を削除しますか？\nパッドから消えて元に戻せません。`,
-                        )
-                      ) {
-                        return;
-                      }
-                      setDeletingId(sound.id);
-                      startTransition(async () => {
-                        const ok = await onDelete(sound.id);
-                        setDeletingId(null);
-                        if (ok) router.refresh();
-                      });
-                    }}
-                  >
-                    <TrashIcon className="size-4" />
-                  </button>
+                {canEdit && (
+                  <div className="absolute left-1.5 top-1.5 z-20 flex items-center gap-1">
+                    {canDelete && onDelete && (
+                      <button
+                        type="button"
+                        className="flex size-8 items-center justify-center rounded-full bg-white/80 text-rose-600 shadow-sm backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                        aria-label={`${sound.name}を削除`}
+                        disabled={busyDelete || busyRename || isRenaming}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (
+                            !window.confirm(
+                              `「${sound.name}」を削除しますか？\nパッドから消えて元に戻せません。`,
+                            )
+                          ) {
+                            return;
+                          }
+                          setDeletingId(sound.id);
+                          startTransition(async () => {
+                            const ok = await onDelete(sound.id);
+                            setDeletingId(null);
+                            if (ok) router.refresh();
+                          });
+                        }}
+                      >
+                        <TrashIcon className="size-4" />
+                      </button>
+                    )}
+                    {onRename && (
+                      <button
+                        type="button"
+                        className="flex size-8 items-center justify-center rounded-full bg-white/80 text-slate-600 shadow-sm backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                        aria-label={`${sound.name}の名前を変更`}
+                        title="名前を変更"
+                        disabled={busyDelete || busyRename}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startRename(sound);
+                        }}
+                      >
+                        <PencilIcon className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
                 )}
                 <button
                   type="button"
@@ -348,6 +446,33 @@ export function SoundGrid({
                 >
                   {fav ? "★" : "☆"}
                 </button>
+                {isRenaming && (
+                  <form
+                    className="absolute inset-x-2 bottom-2 z-30"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      commitRename(sound.id);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Input
+                      autoFocus
+                      value={renameDraft}
+                      maxLength={40}
+                      disabled={pending}
+                      aria-label="サウンド名"
+                      className="h-9 border-white/90 bg-white/95 text-sm font-bold shadow-md"
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      onBlur={() => commitRename(sound.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          cancelRename();
+                        }
+                      }}
+                    />
+                  </form>
+                )}
               </div>
               {onVolumeChange && (
                 <div className="rounded-xl border border-border/70 bg-white/90 px-2 py-1.5">

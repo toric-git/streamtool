@@ -1,8 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { createSound } from "@/app/actions/sounds";
 import { readAudioDurationMs, previewAudioFile } from "@/lib/audio/browser-meta";
+import {
+  CUTE_BUTTON_COLORS,
+  DEFAULT_BUTTON_COLOR,
+  DEFAULT_BUTTON_TEXT_COLOR,
+  findCuteColor,
+} from "@/lib/sounds/button-colors";
 import { validateAudioFileMeta, validateImageFileMeta } from "@/lib/validation/schemas";
 import { Alert } from "@/components/ui/alert";
 import { ErrorAlert } from "@/components/ui/error-alert";
@@ -10,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { E, type AppError, withMessage } from "@/lib/errors/catalog";
+import { cn } from "@/lib/utils";
 
 type Category = { id: string; name: string };
 
@@ -32,8 +39,23 @@ export function SoundUploadForm({
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [durationMs, setDurationMs] = useState<number | null>(null);
+  const defaultColor = useMemo(
+    () =>
+      CUTE_BUTTON_COLORS[
+        Math.floor(Math.random() * CUTE_BUTTON_COLORS.length)
+      ]!,
+    [],
+  );
+  const [buttonColor, setButtonColor] = useState(defaultColor.hex);
+  const [textColor, setTextColor] = useState(defaultColor.text);
   const audioInputId = compact ? "board-audio" : "audio";
   const nameInputId = compact ? "board-sound-name" : "name";
+
+  function pickCuteColor(hex: string) {
+    setButtonColor(hex);
+    const matched = findCuteColor(hex);
+    if (matched) setTextColor(matched.text);
+  }
 
   if (!canUpload) {
     return <ErrorAlert error={E.SOUND_UPLOAD_DISABLED} />;
@@ -132,8 +154,12 @@ export function SoundUploadForm({
             audioPath: audioUpload.path,
             imagePath,
             categoryId: String(formData.get("categoryId") || "") || null,
-            buttonColor: String(formData.get("buttonColor") || "#ff6b9d"),
-            textColor: String(formData.get("textColor") || "#ffffff"),
+            buttonColor: String(
+              formData.get("buttonColor") || DEFAULT_BUTTON_COLOR,
+            ),
+            textColor: String(
+              formData.get("textColor") || DEFAULT_BUTTON_TEXT_COLOR,
+            ),
             volume: Number(formData.get("volume") || 1),
             cooldownMs: Number(formData.get("cooldownMs") || 1000),
             durationMs: duration,
@@ -151,6 +177,12 @@ export function SoundUploadForm({
           );
           form.reset();
           setDurationMs(null);
+          const next =
+            CUTE_BUTTON_COLORS[
+              Math.floor(Math.random() * CUTE_BUTTON_COLORS.length)
+            ]!;
+          setButtonColor(next.hex);
+          setTextColor(next.text);
           onSuccess?.();
         });
       }}
@@ -196,52 +228,86 @@ export function SoundUploadForm({
         <Input id={nameInputId} name="name" required maxLength={40} />
       </div>
 
-      <div className={`grid gap-3 ${compact ? "grid-cols-2" : "sm:grid-cols-2"}`}>
-        <div className="space-y-2">
-          <Label htmlFor={`${audioInputId}-buttonColor`}>ボタン色</Label>
-          <Input
-            id={`${audioInputId}-buttonColor`}
-            name="buttonColor"
-            type="color"
-            defaultValue="#ff4d8d"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor={`${audioInputId}-textColor`}>文字色</Label>
-          <Input
-            id={`${audioInputId}-textColor`}
-            name="textColor"
-            type="color"
-            defaultValue="#ffffff"
-          />
-        </div>
-        {!compact && (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="volume">音量 (0-1)</Label>
-              <Input
-                id="volume"
-                name="volume"
-                type="number"
-                min={0}
-                max={1}
-                step={0.05}
-                defaultValue={1}
+      <div className="space-y-2">
+        <Label>ボタン色</Label>
+        <input type="hidden" name="buttonColor" value={buttonColor} />
+        <input type="hidden" name="textColor" value={textColor} />
+        <div className="grid grid-cols-6 gap-2">
+          {CUTE_BUTTON_COLORS.map((color) => {
+            const selected =
+              buttonColor.toLowerCase() === color.hex.toLowerCase();
+            return (
+              <button
+                key={color.hex}
+                type="button"
+                title={color.label}
+                aria-label={color.label}
+                aria-pressed={selected}
+                onClick={() => pickCuteColor(color.hex)}
+                className={cn(
+                  "aspect-square rounded-xl border-2 shadow-sm transition",
+                  selected
+                    ? "scale-105 border-slate-800 ring-2 ring-slate-800/20"
+                    : "border-white/80 hover:scale-105",
+                )}
+                style={{
+                  background: `linear-gradient(160deg, color-mix(in srgb, ${color.hex} 35%, white), ${color.hex})`,
+                }}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cooldownMs">クールダウン (ms)</Label>
-              <Input
-                id="cooldownMs"
-                name="cooldownMs"
-                type="number"
-                min={0}
-                defaultValue={1000}
-              />
-            </div>
-          </>
-        )}
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-3 pt-1">
+          <div
+            className="flex h-12 flex-1 items-center justify-center rounded-xl border border-white/80 text-sm font-extrabold shadow-sm"
+            style={{
+              background: `linear-gradient(160deg, color-mix(in srgb, ${buttonColor} 28%, white), ${buttonColor})`,
+              color: textColor,
+            }}
+          >
+            プレビュー
+          </div>
+          {!compact && (
+            <Input
+              id={`${audioInputId}-buttonColor`}
+              type="color"
+              value={buttonColor}
+              aria-label="カスタムボタン色"
+              className="h-12 w-14 cursor-pointer p-1"
+              onChange={(e) => {
+                setButtonColor(e.target.value);
+              }}
+            />
+          )}
+        </div>
       </div>
+
+      {!compact && (
+        <div className={`grid gap-3 sm:grid-cols-2`}>
+          <div className="space-y-2">
+            <Label htmlFor="volume">音量 (0-1)</Label>
+            <Input
+              id="volume"
+              name="volume"
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              defaultValue={1}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cooldownMs">クールダウン (ms)</Label>
+            <Input
+              id="cooldownMs"
+              name="cooldownMs"
+              type="number"
+              min={0}
+              defaultValue={1000}
+            />
+          </div>
+        </div>
+      )}
 
       {compact && (
         <>

@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { deleteSound, updateSoundVolume } from "@/app/actions/sounds";
+import {
+  deleteSound,
+  renameSound,
+  updateSoundVolume,
+} from "@/app/actions/sounds";
 import { randomUUID } from "@/lib/crypto/random-uuid";
 import { createClient } from "@/lib/supabase/client";
 import { useLiveBoardCatalog } from "@/hooks/use-live-board-catalog";
@@ -9,7 +13,6 @@ import { useRealtimeRoom } from "@/hooks/use-realtime-room";
 import { useFavoriteSounds } from "@/hooks/use-favorite-sounds";
 import { useSignedMediaUrls } from "@/hooks/use-signed-media-urls";
 import { useSoundCooldown } from "@/hooks/use-sound-cooldown";
-import { AudioEnableGate } from "@/components/soundboard/audio-enable-gate";
 import {
   CategoryChips,
   CategoryRail,
@@ -25,11 +28,6 @@ import {
 import { StopAllButton } from "@/components/soundboard/stop-all-button";
 import { VolumeSlider } from "@/components/soundboard/volume-slider";
 import type { ManageableMember } from "@/components/rooms/member-manage-list";
-import { BoardSoundManager } from "@/components/sounds/board-sound-manager";
-import {
-  PendingSoundList,
-  type PendingSound,
-} from "@/components/sounds/pending-sound-list";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { E, type AppError, withMessage } from "@/lib/errors/catalog";
 import { mapPlaybackError } from "@/lib/errors/messages";
@@ -58,7 +56,6 @@ export function SoundboardApp({
   userId,
   displayName,
   sounds,
-  pendingSounds = [],
   categories,
   members,
 }: {
@@ -77,7 +74,6 @@ export function SoundboardApp({
   userId: string;
   displayName: string;
   sounds: BoardSound[];
-  pendingSounds?: PendingSound[];
   categories: Category[];
   members: ManageableMember[];
 }) {
@@ -91,8 +87,11 @@ export function SoundboardApp({
   const [, startVolumeTransition] = useTransition();
   const { coolingIds, cooldownProgress, startCooldown } = useSoundCooldown();
   const { favoriteIds, toggleFavorite, isFavorite } = useFavoriteSounds(roomId);
-  const { sounds: liveSounds, categories: liveCategories } =
-    useLiveBoardCatalog(roomId, sounds, categories);
+  const {
+    sounds: liveSounds,
+    categories: liveCategories,
+    upsertCategory,
+  } = useLiveBoardCatalog(roomId, sounds, categories);
 
   const imageUrls = useSignedMediaUrls({
     roomId,
@@ -153,6 +152,8 @@ export function SoundboardApp({
     connectionStatus,
     audioUnlocked,
     unlockAudio,
+    preloadAll,
+    preloadState,
     playingIds,
     lastError,
     history,
@@ -205,6 +206,19 @@ export function SoundboardApp({
     return true;
   }, []);
 
+  const handleRenameSound = useCallback(
+    async (soundId: string, name: string) => {
+      setActionError(null);
+      const result = await renameSound(soundId, name);
+      if (!result.ok) {
+        setActionError({ code: result.code, message: result.error });
+        return false;
+      }
+      return true;
+    },
+    [],
+  );
+
   const emitPlay = useCallback(
     async (sound: BoardSound) => {
       setActionError(null);
@@ -221,6 +235,15 @@ export function SoundboardApp({
           ),
         );
         return;
+      }
+
+      // First pad tap doubles as the browser audio unlock gesture.
+      if (!audioUnlocked) {
+        const ok = await unlockAudio();
+        if (!ok) {
+          setActionError(lastError ?? E.AUDIO_UNLOCK_FAILED);
+          return;
+        }
       }
 
       const supabase = createClient();
@@ -243,7 +266,15 @@ export function SoundboardApp({
         startCooldown(sound.id, sound.cooldown_ms);
       }
     },
-    [canPlay, coolingIds, roomId, startCooldown],
+    [
+      audioUnlocked,
+      canPlay,
+      coolingIds,
+      lastError,
+      roomId,
+      startCooldown,
+      unlockAudio,
+    ],
   );
 
   const emitStop = useCallback(
@@ -279,19 +310,6 @@ export function SoundboardApp({
     }
   }
 
-  if (!audioUnlocked) {
-    return (
-      <div className="flex flex-1 items-center justify-center bg-[radial-gradient(ellipse_at_top,rgba(255,77,141,0.15),transparent_50%),linear-gradient(180deg,#fff7fb,#e8f7ff)] p-6">
-        <AudioEnableGate
-          onEnable={async () => {
-            await unlockAudio();
-          }}
-          error={lastError}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[linear-gradient(180deg,#fff7fb_0%,#eef9ff_45%,#fff7fb_100%)]">
       <header className="space-y-3 border-b border-border/70 bg-white/75 px-4 py-3 backdrop-blur-sm">
@@ -309,6 +327,20 @@ export function SoundboardApp({
           <ConnectionStatusBadge status={connectionStatus} />
           {canManage && <StopAllButton onStopAll={emitStopAll} />}
         </div>
+        {!audioUnlocked && (
+          <p className="rounded-xl border border-[var(--hub-coral)]/25 bg-[linear-gradient(90deg,#fff7fb,#ffffff)] px-3 py-2 text-xs font-bold text-muted-foreground">
+            最初のパッドを押すと音声がオンになります
+          </p>
+        )}
+        {liveSounds.length === 0 && liveCategories.length === 0 && (
+          <p className="flex items-center gap-2 rounded-xl border border-sky-200/80 bg-sky-50/90 px-3 py-2 text-xs font-bold text-sky-900">
+            <span
+              className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-sky-300 border-t-sky-700"
+              aria-hidden
+            />
+            初期サウンドを準備中です。まもなくパッドに表示されます
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--hub-coral)]/25 bg-[linear-gradient(90deg,#fff7fb,#ffffff)] px-3 py-2.5">
           <VolumeSlider
             id="master-device-volume"
@@ -345,6 +377,7 @@ export function SoundboardApp({
           categoryId={categoryId}
           canManage={canManage}
           onChange={setCategoryId}
+          onCategoryCreated={upsertCategory}
           onError={setActionError}
         />
 
@@ -355,6 +388,7 @@ export function SoundboardApp({
             categoryId={categoryId}
             canManage={canManage}
             onChange={setCategoryId}
+            onCategoryCreated={upsertCategory}
             onError={setActionError}
           />
           <SoundGrid
@@ -370,7 +404,7 @@ export function SoundboardApp({
             emptyMessage={
               categoryId === "favorites"
                 ? "お気に入りはまだありません。パッド右上の☆で追加できます。"
-                : "このパッドにはまだサウンドがありません。空欄の＋から追加できます。"
+                : "このパッドにはまだサウンドがありません。末尾の＋から追加できます。"
             }
             imageUrls={imageUrls}
             playingIds={playingIds}
@@ -378,46 +412,16 @@ export function SoundboardApp({
             cooldownProgress={cooldownProgress}
             canPlay={canPlay}
             isFavorite={isFavorite}
+            preloadState={preloadState}
+            onPreloadAll={() => void preloadAll()}
             onPlay={(sound) => void emitPlay(sound)}
             onStop={(sound) => void emitStop(sound)}
             onToggleFavorite={toggleFavorite}
             onDelete={canManage ? handleDeleteSound : undefined}
+            onRename={canManage ? handleRenameSound : undefined}
             onVolumeChange={canManage ? handleVolumeChange : undefined}
             onVolumeCommit={canManage ? handleVolumeCommit : undefined}
           />
-          {canManage && (
-            <>
-              <section className="space-y-3 rounded-2xl border border-border/80 bg-white/90 p-4">
-                <div>
-                  <h2 className="font-display text-lg font-semibold tracking-tight">
-                    承認待ち
-                  </h2>
-                  <p className="text-xs font-semibold text-muted-foreground">
-                    メンバー投稿のサウンドを承認または却下します。
-                  </p>
-                </div>
-                <PendingSoundList
-                  sounds={pendingSounds}
-                  canModerate={canManage}
-                />
-              </section>
-              <BoardSoundManager
-                roomId={roomId}
-                initialSounds={soundsWithVolume.map((s) => ({
-                  id: s.id,
-                  name: s.name,
-                  button_color: s.button_color,
-                  text_color: s.text_color,
-                  volume: Number(s.volume),
-                  cooldown_ms: s.cooldown_ms,
-                  category_id: s.category_id,
-                  playback_mode: s.playback_mode ?? "one_shot",
-                  sort_order: s.sort_order,
-                }))}
-                categories={liveCategories}
-              />
-            </>
-          )}
         </section>
 
         <div className="space-y-4">

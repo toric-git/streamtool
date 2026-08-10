@@ -46,6 +46,7 @@ export type PlayRequest = {
 
 export interface AudioEngineLike {
   unlock(): Promise<boolean>;
+  isUnlocked(): boolean;
   preload(soundId: string, audioPath: string): Promise<void>;
   play(request: PlayRequest): Promise<void>;
   stop(soundId: string): void;
@@ -70,6 +71,10 @@ export class AudioEngine implements AudioEngineLike {
 
   setVolumeLayers(layers: AudioEngineOptions["volumeLayers"]) {
     this.options.volumeLayers = layers;
+  }
+
+  isUnlocked(): boolean {
+    return this.unlocked;
   }
 
   async unlock(): Promise<boolean> {

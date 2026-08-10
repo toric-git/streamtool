@@ -5,13 +5,38 @@ import { useRouter } from "next/navigation";
 import { createCategory, renameCategory } from "@/app/actions/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CUTE_BUTTON_COLORS } from "@/lib/sounds/button-colors";
 import type { AppError } from "@/lib/errors/catalog";
 
 export type CategoryFilter = string | "favorites";
 
-type Category = { id: string; name: string };
+type Category = { id: string; name: string; sort_order?: number };
 
-const PAD_COLORS = ["#ff6b9d", "#5eead4", "#fbbf24", "#38bdf8", "#fda4af"];
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function nextDefaultPadName(categories: Category[]) {
+  const base = "ぽんだし";
+  if (!categories.some((c) => c.name === base)) return base;
+  let n = 2;
+  while (categories.some((c) => c.name === `${base} ${n}`)) n += 1;
+  return `${base} ${n}`;
+}
 
 export function CategoryRail({
   roomId,
@@ -19,6 +44,7 @@ export function CategoryRail({
   categoryId,
   canManage,
   onChange,
+  onCategoryCreated,
   onError,
 }: {
   roomId: string;
@@ -26,6 +52,7 @@ export function CategoryRail({
   categoryId: CategoryFilter;
   canManage: boolean;
   onChange: (id: CategoryFilter) => void;
+  onCategoryCreated?: (category: Category) => void;
   onError?: (error: AppError) => void;
 }) {
   return (
@@ -39,6 +66,7 @@ export function CategoryRail({
         categoryId={categoryId}
         canManage={canManage}
         onChange={onChange}
+        onCategoryCreated={onCategoryCreated}
         onError={onError}
         layout="rail"
       />
@@ -52,6 +80,7 @@ export function CategoryChips({
   categoryId,
   canManage,
   onChange,
+  onCategoryCreated,
   onError,
 }: {
   roomId: string;
@@ -59,6 +88,7 @@ export function CategoryChips({
   categoryId: CategoryFilter;
   canManage: boolean;
   onChange: (id: CategoryFilter) => void;
+  onCategoryCreated?: (category: Category) => void;
   onError?: (error: AppError) => void;
 }) {
   return (
@@ -69,6 +99,7 @@ export function CategoryChips({
         categoryId={categoryId}
         canManage={canManage}
         onChange={onChange}
+        onCategoryCreated={onCategoryCreated}
         onError={onError}
         layout="chips"
       />
@@ -82,6 +113,7 @@ function PadSheetList({
   categoryId,
   canManage,
   onChange,
+  onCategoryCreated,
   onError,
   layout,
 }: {
@@ -90,6 +122,7 @@ function PadSheetList({
   categoryId: CategoryFilter;
   canManage: boolean;
   onChange: (id: CategoryFilter) => void;
+  onCategoryCreated?: (category: Category) => void;
   onError?: (error: AppError) => void;
   layout: "rail" | "chips";
 }) {
@@ -124,8 +157,12 @@ function PadSheetList({
   }
 
   function addPad() {
-    const name = `パッド ${categories.length + 1}`;
-    const color = PAD_COLORS[categories.length % PAD_COLORS.length];
+    const name = nextDefaultPadName(categories);
+    const color =
+      CUTE_BUTTON_COLORS[categories.length % CUTE_BUTTON_COLORS.length]!.hex;
+    const sortOrder =
+      categories.reduce((max, c) => Math.max(max, c.sort_order ?? 0), -1) + 1;
+
     startTransition(async () => {
       const result = await createCategory(roomId, name, color);
       if (!result.ok) {
@@ -133,9 +170,13 @@ function PadSheetList({
         return;
       }
       if (result.data?.id) {
-        onChange(result.data.id);
-        setEditingId(result.data.id);
-        setDraftName(name);
+        const created = {
+          id: result.data.id,
+          name,
+          sort_order: sortOrder,
+        };
+        onCategoryCreated?.(created);
+        onChange(created.id);
       }
       router.refresh();
     });
@@ -210,13 +251,13 @@ function PadSheetList({
             {canManage && (
               <button
                 type="button"
-                className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground"
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
                 aria-label={`${c.name}の名前を変更`}
                 title="名前を変更"
                 disabled={pending}
                 onClick={() => startRename(c)}
               >
-                改名
+                <PencilIcon className="size-3.5" />
               </button>
             )}
           </div>

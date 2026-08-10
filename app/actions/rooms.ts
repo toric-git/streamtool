@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { APP_URL } from "@/lib/app-config";
 import {
@@ -166,27 +167,35 @@ export async function createRoom(
     return actionFail(E.ROOM_CREATE_MEMBER);
   }
 
-  try {
-    const seeded = await seedDefaultSounds({
-      admin,
-      roomId,
-      ownerId: user.id,
-    });
-    console.info("[rooms] default sounds", seeded);
-    if (seeded.seeded < 4 && seeded.failed > 0) {
-      console.error(
-        "[rooms]",
-        seeded.seeded === 0
-          ? E.ROOM_CREATE_SEED_FAILED.code
-          : E.SOUND_SEED_PARTIAL.code,
-        seeded,
-        { userId: user.id, roomId },
-      );
+  // Seed starter pads after redirect so room open is not blocked by uploads.
+  const seedRoomId = roomId;
+  const seedOwnerId = user.id;
+  after(async () => {
+    try {
+      const seedAdmin = createAdminClient();
+      const seeded = await seedDefaultSounds({
+        admin: seedAdmin,
+        roomId: seedRoomId,
+        ownerId: seedOwnerId,
+      });
+      console.info("[rooms] default sounds", seeded);
+      if (seeded.seeded < 4 && seeded.failed > 0) {
+        console.error(
+          "[rooms]",
+          seeded.seeded === 0
+            ? E.ROOM_CREATE_SEED_FAILED.code
+            : E.SOUND_SEED_PARTIAL.code,
+          seeded,
+          { userId: seedOwnerId, roomId: seedRoomId },
+        );
+      }
+      revalidatePath(`/rooms/${seedRoomId}`);
+      revalidatePath("/dashboard");
+    } catch (err) {
+      // Room remains usable; owner can upload sounds manually.
+      console.error("[rooms]", E.ROOM_CREATE_SEED_FAILED.code, err);
     }
-  } catch (err) {
-    // Room remains usable; owner can upload sounds manually.
-    console.error("[rooms]", E.ROOM_CREATE_SEED_FAILED.code, err);
-  }
+  });
 
   revalidatePath("/dashboard");
   redirect(`/rooms/${roomId}`);

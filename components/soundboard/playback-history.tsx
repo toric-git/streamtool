@@ -18,9 +18,9 @@ export function PlaybackHistory({
   return (
     <section className="rounded-xl border bg-card p-4">
       <h2 className="text-sm font-semibold">再生履歴</h2>
-      <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto text-sm">
+      <ul className="mt-2 max-h-64 overflow-y-auto text-sm">
         {events.length === 0 ? (
-          <li className="text-muted-foreground">まだ再生がありません</li>
+          <li className="py-1 text-muted-foreground">まだ再生がありません</li>
         ) : (
           events.map((e) => {
             const soundName =
@@ -29,16 +29,29 @@ export function PlaybackHistory({
                 : e.soundId
                   ? "不明なサウンド"
                   : null;
+            const time = new Date(e.createdAt).toLocaleTimeString("ja-JP", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            });
             return (
-              <li key={e.id} className="rounded-md border px-2 py-1.5">
-                <p className="font-medium">
-                  {ACTION_LABEL[e.action]}
-                  {soundName ? ` · ${soundName}` : ""}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {e.userDisplayName} ·{" "}
-                  {new Date(e.createdAt).toLocaleTimeString("ja-JP")}
-                </p>
+              <li
+                key={e.id}
+                className="flex items-center gap-2 truncate border-b border-border/50 py-1.5 last:border-b-0"
+              >
+                <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                  {time}
+                </span>
+                <span className="min-w-0 truncate">
+                  <span className="font-medium">{ACTION_LABEL[e.action]}</span>
+                  {soundName ? (
+                    <span className="text-muted-foreground"> · {soundName}</span>
+                  ) : null}
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {e.userDisplayName}
+                  </span>
+                </span>
               </li>
             );
           })
