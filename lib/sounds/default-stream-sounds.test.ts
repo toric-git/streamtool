@@ -7,6 +7,16 @@ import {
 } from "@/lib/sounds/default-stream-sounds";
 
 describe("DEFAULT_STREAM_SOUNDS", () => {
+  it("seeds exactly four starter sounds", () => {
+    expect(DEFAULT_STREAM_SOUNDS).toHaveLength(4);
+    expect(DEFAULT_STREAM_SOUNDS.map((s) => s.name)).toEqual([
+      "正解",
+      "ハズレ",
+      "ドドン",
+      "ファンファーレ",
+    ]);
+  });
+
   it("has unique names and files", () => {
     const names = DEFAULT_STREAM_SOUNDS.map((s) => s.name);
     const files = DEFAULT_STREAM_SOUNDS.map((s) => s.file);

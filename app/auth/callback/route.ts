@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { needsDisplayNameSetup } from "@/lib/auth/display-name";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -39,7 +40,18 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      const response = NextResponse.redirect(`${origin}${next}`);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      let destination = next;
+      if (needsDisplayNameSetup(user)) {
+        const onboarding = new URL("/onboarding/name", origin);
+        onboarding.searchParams.set("next", next);
+        destination = `${onboarding.pathname}${onboarding.search}`;
+      }
+
+      const response = NextResponse.redirect(`${origin}${destination}`);
       response.cookies.set("auth_next", "", { path: "/", maxAge: 0 });
       return response;
     }
@@ -51,7 +63,10 @@ export async function GET(request: Request) {
     );
     const url = new URL("/login", origin);
     url.searchParams.set("error", "oauth");
-    url.searchParams.set("detail", "セッションの確立に失敗しました。もう一度お試しください。");
+    url.searchParams.set(
+      "detail",
+      "セッションの確立に失敗しました。もう一度お試しください。",
+    );
     const response = NextResponse.redirect(url);
     response.cookies.set("auth_next", "", { path: "/", maxAge: 0 });
     return response;

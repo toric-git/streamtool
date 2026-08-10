@@ -9,7 +9,9 @@ export type LiveMember = {
   display_name: string;
   role: string;
   can_play: boolean;
+  can_upload?: boolean;
   is_muted: boolean;
+  joined_at?: string;
 };
 
 export function useRoomMembersLive(
@@ -18,6 +20,10 @@ export function useRoomMembersLive(
 ) {
   const [members, setMembers] = useState(initialMembers);
   const supabase = useMemo(() => createClient(), []);
+
+  useEffect(() => {
+    setMembers(initialMembers);
+  }, [initialMembers]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -44,15 +50,18 @@ export function useRoomMembersLive(
           if (!row?.user_id) return;
           setMembers((prev) => {
             const idx = prev.findIndex((m) => m.user_id === row.user_id);
-            if (idx === -1) return [...prev, row];
-            const next = [...prev];
-            next[idx] = {
+            const nextRow: LiveMember = {
               user_id: row.user_id,
               display_name: row.display_name,
               role: row.role,
               can_play: row.can_play,
+              can_upload: row.can_upload,
               is_muted: row.is_muted,
+              joined_at: row.joined_at,
             };
+            if (idx === -1) return [...prev, nextRow];
+            const next = [...prev];
+            next[idx] = { ...prev[idx], ...nextRow };
             return next;
           });
         },

@@ -86,7 +86,7 @@ export const updateRoomSchema = z.object({
 export const joinRoomSchema = z.object({
   roomCode: roomCodeSchema,
   password: z.string().max(72).optional().or(z.literal("")),
-  displayName: displayNameSchema.optional(),
+  displayName: displayNameSchema,
 });
 
 export function getExtension(filename: string): string {

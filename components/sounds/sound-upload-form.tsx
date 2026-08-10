@@ -17,15 +17,21 @@ export function SoundUploadForm({
   roomId,
   categories,
   canUpload,
+  compact = false,
+  onSuccess,
 }: {
   roomId: string;
   categories: Category[];
   canUpload: boolean;
+  compact?: boolean;
+  onSuccess?: () => void;
 }) {
   const [error, setError] = useState<AppError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [durationMs, setDurationMs] = useState<number | null>(null);
+  const audioInputId = compact ? "board-audio" : "audio";
+  const nameInputId = compact ? "board-sound-name" : "name";
 
   if (!canUpload) {
     return <ErrorAlert error={E.SOUND_UPLOAD_DISABLED} />;
@@ -33,7 +39,11 @@ export function SoundUploadForm({
 
   return (
     <form
-      className="space-y-4 rounded-xl border bg-card p-4"
+      className={
+        compact
+          ? "space-y-3 rounded-xl border border-[var(--hub-coral)]/30 bg-[linear-gradient(180deg,#fff7fb,#ffffff)] p-3"
+          : "space-y-4 rounded-xl border bg-card p-4"
+      }
       onSubmit={(e) => {
         e.preventDefault();
         const form = e.currentTarget;
@@ -133,21 +143,29 @@ export function SoundUploadForm({
           }
 
           setSuccess(
-            "サウンドを登録しました。承認が必要な場合は、承認されるまでボードに表示されません。",
+            compact
+              ? "追加しました。パッドに反映されます。"
+              : "サウンドを登録しました。承認が必要な場合は、承認されるまでボードに表示されません。",
           );
           form.reset();
           setDurationMs(null);
+          onSuccess?.();
         });
       }}
     >
-      <h2 className="text-lg font-semibold">サウンドを追加</h2>
+      {!compact && <h2 className="text-lg font-semibold">サウンドを追加</h2>}
+      {compact && (
+        <p className="text-sm font-bold">新しいパッドを追加</p>
+      )}
       {error && <ErrorAlert error={error} />}
       {success && <Alert>{success}</Alert>}
 
       <div className="space-y-2">
-        <Label htmlFor="audio">音声ファイル (MP3/WAV/OGG, 10MB・30秒以下)</Label>
+        <Label htmlFor={audioInputId}>
+          音声ファイル (MP3/WAV/OGG, 10MB・30秒以下)
+        </Label>
         <Input
-          id="audio"
+          id={audioInputId}
           name="audio"
           type="file"
           accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg"
@@ -172,68 +190,125 @@ export function SoundUploadForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="name">ボタン名</Label>
-        <Input id="name" name="name" required maxLength={40} />
+        <Label htmlFor={nameInputId}>ボタン名</Label>
+        <Input id={nameInputId} name="name" required maxLength={40} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={`grid gap-3 ${compact ? "grid-cols-2" : "sm:grid-cols-2"}`}>
         <div className="space-y-2">
-          <Label htmlFor="buttonColor">ボタン色</Label>
-          <Input id="buttonColor" name="buttonColor" type="color" defaultValue="#334155" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="textColor">文字色</Label>
-          <Input id="textColor" name="textColor" type="color" defaultValue="#ffffff" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="volume">音量 (0-1)</Label>
+          <Label htmlFor={`${audioInputId}-buttonColor`}>ボタン色</Label>
           <Input
-            id="volume"
-            name="volume"
-            type="number"
-            min={0}
-            max={1}
-            step={0.05}
-            defaultValue={1}
+            id={`${audioInputId}-buttonColor`}
+            name="buttonColor"
+            type="color"
+            defaultValue="#ff4d8d"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="cooldownMs">クールダウン (ms)</Label>
-          <Input id="cooldownMs" name="cooldownMs" type="number" min={0} defaultValue={1000} />
+          <Label htmlFor={`${audioInputId}-textColor`}>文字色</Label>
+          <Input
+            id={`${audioInputId}-textColor`}
+            name="textColor"
+            type="color"
+            defaultValue="#ffffff"
+          />
         </div>
+        {!compact && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="volume">音量 (0-1)</Label>
+              <Input
+                id="volume"
+                name="volume"
+                type="number"
+                min={0}
+                max={1}
+                step={0.05}
+                defaultValue={1}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cooldownMs">クールダウン (ms)</Label>
+              <Input
+                id="cooldownMs"
+                name="cooldownMs"
+                type="number"
+                min={0}
+                defaultValue={1000}
+              />
+            </div>
+          </>
+        )}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="categoryId">カテゴリー</Label>
-        <select
-          id="categoryId"
-          name="categoryId"
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          defaultValue=""
-        >
-          <option value="">なし</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {compact && (
+        <>
+          <input type="hidden" name="volume" value="1" />
+          <input type="hidden" name="cooldownMs" value="1000" />
+        </>
+      )}
 
-      <div className="space-y-2">
-        <Label htmlFor="image">背景画像（任意）</Label>
-        <Input id="image" name="image" type="file" accept=".jpg,.jpeg,.png,.webp,image/*" />
-      </div>
+      {!compact && (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="categoryId">カテゴリー</Label>
+            <select
+              id="categoryId"
+              name="categoryId"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              defaultValue=""
+            >
+              <option value="">なし</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="image">背景画像（任意）</Label>
+            <Input
+              id="image"
+              name="image"
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,image/*"
+            />
+          </div>
+        </>
+      )}
+
+      {compact && categories.length > 0 && (
+        <div className="space-y-2">
+          <Label htmlFor="board-categoryId">カテゴリー（任意）</Label>
+          <select
+            id="board-categoryId"
+            name="categoryId"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            defaultValue=""
+          >
+            <option value="">なし</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={pending}>
-          {pending ? "アップロード中…" : "登録"}
+          {pending ? "アップロード中…" : compact ? "パッドに追加" : "登録"}
         </Button>
         <Button
           type="button"
           variant="outline"
           onClick={async () => {
-            const input = document.getElementById("audio") as HTMLInputElement | null;
+            const input = document.getElementById(
+              audioInputId,
+            ) as HTMLInputElement | null;
             const file = input?.files?.[0];
             if (!file) {
               setError(E.SOUND_PREVIEW_REQUIRED);

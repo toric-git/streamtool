@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { readFile } from "fs/promises";
 import path from "path";
 import { STORAGE_BUCKETS } from "@/lib/app-config";
+import { E } from "@/lib/errors/catalog";
 import {
   DEFAULT_STREAM_CATEGORY,
   DEFAULT_STREAM_SOUNDS,
@@ -20,7 +21,8 @@ const ASSETS_DIR = path.join(
 
 export type SeedDefaultSoundsResult = {
   seeded: number;
-  skipped: number;
+  skippedExisting: number;
+  failed: number;
   categoryId: string | null;
 };
 
@@ -66,7 +68,8 @@ export async function seedDefaultSounds(options: {
 
     if (categoryError) {
       console.error(
-        "[sounds] default category failed",
+        "[sounds]",
+        E.CATEGORY_CREATE_FAILED.code,
         categoryError.code,
         categoryError.message,
       );
@@ -85,11 +88,12 @@ export async function seedDefaultSounds(options: {
 
   let sortOrder = (maxSort?.sort_order ?? -1) + 1;
   let seeded = 0;
-  let skipped = 0;
+  let skippedExisting = 0;
+  let failed = 0;
 
   for (const item of DEFAULT_STREAM_SOUNDS) {
     if (existingNames.has(item.name)) {
-      skipped += 1;
+      skippedExisting += 1;
       continue;
     }
 
@@ -98,13 +102,19 @@ export async function seedDefaultSounds(options: {
     try {
       bytes = await readFile(localPath);
     } catch (err) {
-      console.error("[sounds] missing default asset", item.file, err);
-      skipped += 1;
+      console.error(
+        "[sounds]",
+        E.SOUND_SEED_ASSET_MISSING.code,
+        item.file,
+        err,
+      );
+      failed += 1;
       continue;
     }
 
     if (bytes.byteLength === 0) {
-      skipped += 1;
+      console.error("[sounds]", E.SOUND_SEED_ASSET_MISSING.code, item.file);
+      failed += 1;
       continue;
     }
 
@@ -118,11 +128,12 @@ export async function seedDefaultSounds(options: {
 
     if (uploadError) {
       console.error(
-        "[sounds] default upload failed",
+        "[sounds]",
+        E.SOUND_SEED_UPLOAD_FAILED.code,
         item.name,
         uploadError.message,
       );
-      skipped += 1;
+      failed += 1;
       continue;
     }
 
@@ -145,13 +156,14 @@ export async function seedDefaultSounds(options: {
 
     if (insertError) {
       console.error(
-        "[sounds] default insert failed",
+        "[sounds]",
+        E.SOUND_SEED_INSERT_FAILED.code,
         item.name,
         insertError.code,
         insertError.message,
       );
       await admin.storage.from(STORAGE_BUCKETS.audio).remove([audioPath]);
-      skipped += 1;
+      failed += 1;
       continue;
     }
 
@@ -160,5 +172,5 @@ export async function seedDefaultSounds(options: {
     seeded += 1;
   }
 
-  return { seeded, skipped, categoryId };
+  return { seeded, skippedExisting, failed, categoryId };
 }

@@ -7,6 +7,7 @@ import {
   shouldPlayClientEvent,
 } from "@/lib/audio/playback-math";
 import { REALTIME_LIMITS } from "@/lib/app-config";
+import { E, type AppError } from "@/lib/errors/catalog";
 import { fetchSignedMediaUrl } from "@/lib/media/signed-url-client";
 import type { ConnectionStatus, PlaybackEventPayload } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
@@ -47,7 +48,7 @@ export function useRealtimeRoom({
     useState<ConnectionStatus>("disconnected");
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [playingIds, setPlayingIds] = useState<string[]>([]);
-  const [lastError, setLastError] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<AppError | null>(null);
   const [history, setHistory] = useState<PlaybackEventPayload[]>([]);
 
   const seenIdsRef = useRef(new Set<string>());
@@ -178,8 +179,11 @@ export function useRealtimeRoom({
               setPlayingIds(engineRef.current?.getPlayingSoundIds() ?? []);
             }
           } catch (err) {
-            console.error("[realtime] playback failed", err instanceof Error ? err.message : "error");
-            setLastError("音声の再生に失敗しました。再読み込みするか、音声を有効化してください。");
+            const message = err instanceof Error ? err.message : "error";
+            console.error("[realtime]", E.AUDIO_PLAYBACK_FAILED.code, message);
+            setLastError(
+              message === "audio_locked" ? E.AUDIO_LOCKED : E.AUDIO_PLAYBACK_FAILED,
+            );
           }
         },
       )
@@ -209,13 +213,13 @@ export function useRealtimeRoom({
   async function unlockAudio() {
     const engine = engineRef.current;
     if (!engine) {
-      setLastError("音声エンジンの準備ができていません。もう一度タップしてください。");
+      setLastError(E.AUDIO_ENGINE_NOT_READY);
       return false;
     }
     const ok = await engine.unlock();
     setAudioUnlocked(ok);
     if (!ok) {
-      setLastError("音声の有効化に失敗しました。ブラウザの設定を確認してください。");
+      setLastError(E.AUDIO_UNLOCK_FAILED);
     } else {
       setLastError(null);
     }

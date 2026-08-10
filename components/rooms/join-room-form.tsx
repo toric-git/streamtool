@@ -22,11 +22,13 @@ export function JoinRoomForm({
   info,
   isAuthenticated,
   isAnonymous,
+  suggestedDisplayName = "",
 }: {
   roomCode: string;
   info: JoinInfo | null;
   isAuthenticated: boolean;
   isAnonymous: boolean;
+  suggestedDisplayName?: string;
 }) {
   const [error, setError] = useState<AppError | null>(null);
   const [pending, startTransition] = useTransition();
@@ -79,18 +81,21 @@ export function JoinRoomForm({
       {full && <ErrorAlert error={E.ROOM_JOIN_FULL} />}
       {error && <ErrorAlert error={error} />}
 
-      {(!isAuthenticated || isAnonymous) && (
-        <div className="space-y-2">
-          <Label htmlFor="displayName">表示名</Label>
-          <Input
-            id="displayName"
-            name="displayName"
-            required={!isAuthenticated || isAnonymous}
-            maxLength={30}
-            placeholder="配信で使う名前"
-          />
-        </div>
-      )}
+      <div className="space-y-2">
+        <Label htmlFor="displayName">表示名</Label>
+        <Input
+          id="displayName"
+          name="displayName"
+          required
+          maxLength={30}
+          autoComplete="nickname"
+          defaultValue={suggestedDisplayName}
+          placeholder="この部屋で使う名前"
+        />
+        <p className="text-xs text-muted-foreground">
+          参加者一覧に出る名前です。Googleアカウント名は使いません。
+        </p>
+      </div>
 
       {info.has_password && (
         <div className="space-y-2">
@@ -118,16 +123,17 @@ export function JoinRoomForm({
         </div>
       ) : (
         <Button type="submit" className="w-full" disabled={pending || full}>
-          {pending
-            ? "参加中…"
-            : "参加して音声を有効にする"}
+          {pending ? "参加中…" : "参加して音声を有効にする"}
         </Button>
       )}
 
       {!isAuthenticated && canGuest && (
         <p className="text-center text-xs text-muted-foreground">
           アカウントがある場合は{" "}
-          <Link className="underline underline-offset-2" href={`/login?next=/join/${roomCode}`}>
+          <Link
+            className="underline underline-offset-2"
+            href={`/login?next=/join/${roomCode}`}
+          >
             ログイン
           </Link>
           してから参加できます。

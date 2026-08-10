@@ -136,6 +136,56 @@ export async function createSound(
   return actionOk({ soundId: data.id });
 }
 
+export async function updateSoundVolume(
+  soundId: string,
+  volume: number,
+): Promise<ActionResult> {
+  const parsed = volumeSchema.safeParse(volume);
+  if (!parsed.success) {
+    return actionFail(
+      withMessage(
+        E.VALIDATION,
+        parsed.error.issues[0]?.message ?? "音量は 0〜1 で指定してください。",
+      ),
+    );
+  }
+
+  const { supabase, user } = await getSessionUser();
+  if (!user) return actionFail(E.AUTH_REQUIRED);
+
+  const { data: sound } = await supabase
+    .from("sounds")
+    .select("id, room_id")
+    .eq("id", soundId)
+    .maybeSingle();
+
+  if (!sound) return actionFail(E.SOUND_NOT_FOUND);
+
+  const actor = await requireRoomActor(sound.room_id);
+  if (!actor.ok) return actionFailFrom(actor);
+  if (!isOwnerOrAdmin(actor.membership.role)) {
+    return actionFail(E.SOUND_EDIT_FORBIDDEN);
+  }
+
+  const { error } = await supabase
+    .from("sounds")
+    .update({ volume: parsed.data })
+    .eq("id", soundId);
+
+  if (error) {
+    console.error(
+      "[sounds]",
+      E.SOUND_UPDATE_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.SOUND_UPDATE_FAILED);
+  }
+
+  revalidateSounds(sound.room_id);
+  return actionOk();
+}
+
 export async function updateSoundMeta(
   soundId: string,
   formData: FormData,
@@ -360,7 +410,9 @@ export async function reorderSoundsAction(
 
 export async function installDefaultStreamSounds(
   roomId: string,
-): Promise<ActionResult<{ seeded: number; skipped: number }>> {
+): Promise<
+  ActionResult<{ seeded: number; skippedExisting: number; failed: number }>
+> {
   const actor = await requireRoomActor(roomId);
   if (!actor.ok) return actionFailFrom(actor);
   if (!isOwnerOrAdmin(actor.membership.role)) {
@@ -374,13 +426,20 @@ export async function installDefaultStreamSounds(
       roomId,
       ownerId: actor.user.id,
     });
+
     if (result.seeded === 0) {
+      if (result.failed > 0) return actionFail(E.SOUND_SEED_FAILED);
       return actionFail(E.SOUND_SEED_NONE);
     }
+
     revalidateSounds(roomId);
-    return actionOk({ seeded: result.seeded, skipped: result.skipped });
+    return actionOk({
+      seeded: result.seeded,
+      skippedExisting: result.skippedExisting,
+      failed: result.failed,
+    });
   } catch (err) {
-    console.error("[sounds] seed defaults failed", err);
+    console.error("[sounds]", E.SOUND_SEED_FAILED.code, err);
     return actionFail(E.SOUND_SEED_FAILED);
   }
 }

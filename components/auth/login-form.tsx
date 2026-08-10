@@ -107,8 +107,8 @@ export function LoginForm() {
         <CardTitle className="text-xl">{APP_NAME}</CardTitle>
         <CardDescription>
           {mode === "login"
-            ? "メールまたは Google でログイン"
-            : "新規アカウントを作成"}
+            ? "メールまたは Google でログイン（Googleは表示名の入力が必要です）"
+            : "表示名を決めてアカウントを作成"}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -143,8 +143,11 @@ export function LoginForm() {
                 autoComplete="nickname"
                 required
                 maxLength={30}
-                placeholder="配信者名など"
+                placeholder="配信で使う名前"
               />
+              <p className="text-xs text-muted-foreground">
+                部屋や参加者一覧に表示されます。Googleアカウント名は使いません。
+              </p>
             </div>
           )}
           <div className="space-y-2">

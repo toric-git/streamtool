@@ -4,14 +4,18 @@
  *
  * 帯域:
  *   E10xx 認証
- *   E20xx 部屋（共通・作成・設定・退出）
+ *   E20xx / E21xx / E22xx 部屋（共通・作成・設定・退出）
  *   E23xx 部屋参加
  *   E30xx メンバー
- *   E40xx サウンド / メディア
+ *   E40xx サウンド / メディア / 初期サウンドシード
  *   E45xx カテゴリー
- *   E50xx 再生
+ *   E50xx 再生 / 音声エンジン
  *   E60xx OBS
  *   E90xx 入力検証・クライアント・不明
+ *
+ * 欠番: E4019（未使用。再割り当てしない）
+ * 表示名: Google full_name は使わない。user_metadata.display_name のみ採用。
+ * 一覧ドキュメント: docs/ERROR_CODES.md
  */
 
 export type ErrorCode = `E${number}`;
@@ -69,6 +73,14 @@ export const E = {
     "E1012",
     "Googleログインの開始に失敗しました。もう一度お試しください。",
   ),
+  AUTH_DISPLAY_NAME_REQUIRED: e(
+    "E1013",
+    "表示名の設定が必要です。アプリで使う名前を入力してください。",
+  ),
+  PROFILE_NAME_UPDATE_FAILED: e(
+    "E1014",
+    "表示名の保存に失敗しました。もう一度お試しください。",
+  ),
 
   // --- Room common E20xx ---
   ROOM_NOT_MEMBER: e("E2001", "この部屋のメンバーではありません。"),
@@ -96,6 +108,10 @@ export const E = {
     "E2104",
     "部屋メンバーの登録に失敗しました。もう一度作成してください。",
   ),
+  ROOM_CREATE_SEED_FAILED: e(
+    "E2105",
+    "部屋は作成されましたが、初期サウンド（正解・ハズレ・ドドン・ファンファーレ）の設置に失敗しました。サウンド管理から追加してください。",
+  ),
 
   // --- Room update / delete / leave E22xx ---
   ROOM_UPDATE_FORBIDDEN: e(
@@ -118,7 +134,7 @@ export const E = {
   ),
 
   // --- Room join E23xx ---
-  ROOM_JOIN_GUEST_NAME: e("E2301", "ゲスト参加には表示名が必要です。"),
+  ROOM_JOIN_GUEST_NAME: e("E2301", "参加には表示名が必要です。"),
   ROOM_JOIN_AUTH_REQUIRED: e(
     "E2302",
     "参加するにはログインまたはゲスト参加が必要です。",
@@ -229,15 +245,31 @@ export const E = {
   ),
   SOUND_SEED_FORBIDDEN: e(
     "E4025",
-    "配信サンプル音を追加できるのはオーナーまたは管理者のみです。",
+    "初期サウンドを追加できるのはオーナーまたは管理者のみです。",
   ),
   SOUND_SEED_FAILED: e(
     "E4026",
-    "配信サンプル音の追加に失敗しました。時間をおいて再試行してください。",
+    "初期サウンドの追加に失敗しました。時間をおいて再試行してください。",
   ),
   SOUND_SEED_NONE: e(
     "E4027",
-    "追加できるサンプルがありません（同名の音が既に登録済みです）。",
+    "追加できる初期サウンドがありません（同名の音が既に登録済みです）。",
+  ),
+  SOUND_SEED_ASSET_MISSING: e(
+    "E4028",
+    "初期サウンドの音声ファイルが見つかりません。サーバー設定を確認してください。",
+  ),
+  SOUND_SEED_UPLOAD_FAILED: e(
+    "E4029",
+    "初期サウンドのストレージアップロードに失敗しました。",
+  ),
+  SOUND_SEED_INSERT_FAILED: e(
+    "E4030",
+    "初期サウンドのデータベース登録に失敗しました。",
+  ),
+  SOUND_SEED_PARTIAL: e(
+    "E4031",
+    "一部の初期サウンドだけ追加できました。不足分はサウンド管理から再追加してください。",
   ),
 
   // --- Categories E45xx ---
@@ -265,6 +297,18 @@ export const E = {
   AUDIO_UNLOCK_FAILED: e(
     "E5008",
     "音声の有効化に失敗しました。ブラウザの設定を確認してください。",
+  ),
+  AUDIO_ENGINE_NOT_READY: e(
+    "E5009",
+    "音声エンジンの準備ができていません。もう一度タップしてください。",
+  ),
+  AUDIO_PLAYBACK_FAILED: e(
+    "E5010",
+    "音声の再生に失敗しました。再読み込みするか、音声を有効化してください。",
+  ),
+  AUDIO_LOCKED: e(
+    "E5011",
+    "音声がロックされています。画面の案内に従って音声をオンにしてください。",
   ),
 
   // --- OBS E60xx ---

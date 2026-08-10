@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions/result";
 import { E, withMessage } from "@/lib/errors/catalog";
 import { mapRoomJoinError } from "@/lib/errors/messages";
+import { PLACEHOLDER_DISPLAY_NAME } from "@/lib/auth/display-name";
 import { buildInviteUrl, generateRoomCode } from "@/lib/rooms/codes";
 import { seedDefaultSounds } from "@/lib/sounds/seed-default-sounds";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -58,15 +59,24 @@ export async function createRoom(
     .eq("id", user.id)
     .maybeSingle();
 
+  // Never fall back to Google full_name / email local-part.
+  const metaName =
+    typeof user.user_metadata?.display_name === "string"
+      ? user.user_metadata.display_name.trim()
+      : "";
   const displayName =
-    profile?.display_name ??
-    user.user_metadata?.display_name ??
-    user.user_metadata?.full_name ??
-    user.email?.split("@")[0] ??
-    "Owner";
+    (metaName && metaName.length > 0 ? metaName : null) ??
+    (profile?.display_name &&
+    profile.display_name !== PLACEHOLDER_DISPLAY_NAME
+      ? profile.display_name
+      : null);
+
+  if (!displayName) {
+    return actionFail(E.AUTH_DISPLAY_NAME_REQUIRED);
+  }
 
   // Ensure profile exists (FK on rooms.owner_id). Trigger may have missed OAuth users.
-  if (!profile) {
+  if (!profile || profile.display_name !== displayName) {
     const admin = createAdminClient();
     const { error: profileError } = await admin.from("profiles").upsert({
       id: user.id,
@@ -163,9 +173,24 @@ export async function createRoom(
       ownerId: user.id,
     });
     console.info("[rooms] default sounds", seeded);
+    if (seeded.seeded === 0 && seeded.failed > 0) {
+      console.error(
+        "[rooms]",
+        E.ROOM_CREATE_SEED_FAILED.code,
+        seeded,
+        { userId: user.id, roomId },
+      );
+    } else if (seeded.seeded > 0 && seeded.failed > 0) {
+      console.error(
+        "[rooms]",
+        E.SOUND_SEED_PARTIAL.code,
+        seeded,
+        { userId: user.id, roomId },
+      );
+    }
   } catch (err) {
-    // Room is usable without defaults; owner can add samples from サウンド管理.
-    console.error("[rooms] default sounds seed failed", err);
+    // Room is usable without defaults; owner can add from サウンド管理.
+    console.error("[rooms]", E.ROOM_CREATE_SEED_FAILED.code, err);
   }
 
   revalidatePath("/dashboard");
@@ -283,7 +308,7 @@ export async function joinRoomAction(
   const parsed = joinRoomSchema.safeParse({
     roomCode: formData.get("roomCode"),
     password: formData.get("password") || "",
-    displayName: formData.get("displayName") || undefined,
+    displayName: formData.get("displayName"),
   });
 
   if (!parsed.success) {
@@ -302,10 +327,11 @@ export async function joinRoomAction(
 
   const asGuest = formData.get("asGuest") === "on";
 
+  if (!parsed.data.displayName) {
+    return actionFail(E.ROOM_JOIN_GUEST_NAME);
+  }
+
   if (!user && asGuest) {
-    if (!parsed.data.displayName) {
-      return actionFail(E.ROOM_JOIN_GUEST_NAME);
-    }
     const { data, error } = await supabase.auth.signInAnonymously({
       options: {
         data: { display_name: parsed.data.displayName },
@@ -325,6 +351,21 @@ export async function joinRoomAction(
 
   if (!user) {
     return actionFail(E.ROOM_JOIN_AUTH_REQUIRED);
+  }
+
+  // Persist chosen room display name on the account (never Google full_name).
+  if (!user.is_anonymous) {
+    const { error: metaError } = await supabase.auth.updateUser({
+      data: { display_name: parsed.data.displayName },
+    });
+    if (metaError) {
+      console.error(
+        "[rooms]",
+        E.PROFILE_NAME_UPDATE_FAILED.code,
+        metaError.name,
+        metaError.message,
+      );
+    }
   }
 
   const { data: info, error: infoError } = await supabase.rpc(
@@ -389,7 +430,7 @@ export async function joinRoomAction(
       {
         p_user_id: user.id,
         p_room_code: parsed.data.roomCode,
-        p_display_name: parsed.data.displayName ?? null,
+        p_display_name: parsed.data.displayName,
       },
     );
 
@@ -420,7 +461,7 @@ export async function joinRoomAction(
   const { data: joined, error: joinError } = await supabase.rpc("join_room", {
     p_room_code: parsed.data.roomCode,
     p_password: null,
-    p_display_name: parsed.data.displayName ?? null,
+    p_display_name: parsed.data.displayName,
   });
 
   if (joinError) {

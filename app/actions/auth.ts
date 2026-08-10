@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { E, type ErrorCode } from "@/lib/errors/catalog";
 import { mapAuthError } from "@/lib/errors/messages";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { loginSchema, signupSchema } from "@/lib/validation/schemas";
 
@@ -89,6 +90,18 @@ export async function signUpWithEmail(
       error.code,
     );
     return { error: mapped.message, code: mapped.code };
+  }
+
+  if (data.user) {
+    try {
+      const admin = createAdminClient();
+      await admin.from("profiles").upsert({
+        id: data.user.id,
+        display_name: parsed.data.displayName,
+      });
+    } catch (err) {
+      console.error("[auth] profile upsert after signup", err);
+    }
   }
 
   if (data.session) {

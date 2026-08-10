@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
+import { updateSoundVolume } from "@/app/actions/sounds";
 import { randomUUID } from "@/lib/crypto/random-uuid";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeRoom } from "@/hooks/use-realtime-room";
@@ -8,6 +9,7 @@ import { useFavoriteSounds } from "@/hooks/use-favorite-sounds";
 import { useSignedMediaUrls } from "@/hooks/use-signed-media-urls";
 import { useSoundCooldown } from "@/hooks/use-sound-cooldown";
 import { AudioEnableGate } from "@/components/soundboard/audio-enable-gate";
+import { BoardSoundsPanel } from "@/components/soundboard/board-sounds-panel";
 import {
   CategoryChips,
   CategoryRail,
@@ -21,22 +23,19 @@ import {
   type BoardSound,
 } from "@/components/soundboard/sound-grid";
 import { StopAllButton } from "@/components/soundboard/stop-all-button";
+import { VolumeSlider } from "@/components/soundboard/volume-slider";
+import type { ManageableMember } from "@/components/rooms/member-manage-list";
 import { ErrorAlert } from "@/components/ui/error-alert";
-import { Label } from "@/components/ui/label";
 import { E, type AppError, withMessage } from "@/lib/errors/catalog";
 import { mapPlaybackError } from "@/lib/errors/messages";
-import { canUserPlay, isOwnerOrAdmin } from "@/lib/permissions/room-permissions";
+import {
+  canUserPlay,
+  canUserUpload,
+  isOwnerOrAdmin,
+} from "@/lib/permissions/room-permissions";
 import type { RoomRole } from "@/types/database";
 
 type Category = { id: string; name: string };
-
-type Member = {
-  user_id: string;
-  display_name: string;
-  role: string;
-  can_play: boolean;
-  is_muted: boolean;
-};
 
 export function SoundboardApp({
   roomId,
@@ -45,8 +44,10 @@ export function SoundboardApp({
   masterVolume,
   maxSimultaneous,
   guestCanPlay,
+  uploadEnabled,
   role,
   canPlayFlag,
+  canUploadFlag,
   isMuted,
   userId,
   displayName,
@@ -60,19 +61,23 @@ export function SoundboardApp({
   masterVolume: number;
   maxSimultaneous: number;
   guestCanPlay: boolean;
+  uploadEnabled: boolean;
   role: RoomRole;
   canPlayFlag: boolean;
+  canUploadFlag: boolean;
   isMuted: boolean;
   userId: string;
   displayName: string;
   sounds: BoardSound[];
   categories: Category[];
-  members: Member[];
+  members: ManageableMember[];
 }) {
   const [deviceVolume, setDeviceVolume] = useState(1);
   const [muted, setMuted] = useState(false);
+  const [soundVolumes, setSoundVolumes] = useState<Record<string, number>>({});
   const [categoryId, setCategoryId] = useState<CategoryFilter>("all");
   const [actionError, setActionError] = useState<AppError | null>(null);
+  const [, startVolumeTransition] = useTransition();
   const { coolingIds, cooldownProgress, startCooldown } = useSoundCooldown();
   const { favoriteIds, toggleFavorite, isFavorite } = useFavoriteSounds(roomId);
   const imageUrls = useSignedMediaUrls({
@@ -88,15 +93,29 @@ export function SoundboardApp({
     isMuted,
     guestCanPlay,
   });
-  const canStopAll = isOwnerOrAdmin(role);
+  const canManage = isOwnerOrAdmin(role);
+  const canUpload = canUserUpload({
+    role,
+    canUploadFlag,
+    uploadEnabled,
+  });
+
+  const soundsWithVolume = useMemo(
+    () =>
+      sounds.map((s) => ({
+        ...s,
+        volume: soundVolumes[s.id] ?? Number(s.volume),
+      })),
+    [sounds, soundVolumes],
+  );
 
   const filtered = useMemo(() => {
-    if (categoryId === "all") return sounds;
+    if (categoryId === "all") return soundsWithVolume;
     if (categoryId === "favorites") {
-      return sounds.filter((s) => favoriteIds.includes(s.id));
+      return soundsWithVolume.filter((s) => favoriteIds.includes(s.id));
     }
-    return sounds.filter((s) => s.category_id === categoryId);
-  }, [sounds, categoryId, favoriteIds]);
+    return soundsWithVolume.filter((s) => s.category_id === categoryId);
+  }, [soundsWithVolume, categoryId, favoriteIds]);
 
   const soundNames = useMemo(() => {
     const map: Record<string, string> = {};
@@ -120,7 +139,8 @@ export function SoundboardApp({
     history,
   } = useRealtimeRoom({
     roomId,
-    sounds: filtered.map((s) => ({
+    // Full board catalog so filtered views still hear other members' plays.
+    sounds: soundsWithVolume.map((s) => ({
       id: s.id,
       audio_path: s.audio_path,
       volume: Number(s.volume),
@@ -133,37 +153,60 @@ export function SoundboardApp({
     enabled: true,
   });
 
-  async function emitPlay(sound: BoardSound) {
-    setActionError(null);
-    if (!canPlay) {
-      setActionError(E.PLAY_DENIED);
-      return;
-    }
-    if (coolingIds[sound.id]) {
-      setActionError(
-        withMessage(E.PLAY_COOLDOWN, "クールダウン中です。少し待ってから押してください。"),
-      );
-      return;
-    }
+  const handleVolumeChange = useCallback((soundId: string, volume: number) => {
+    setSoundVolumes((prev) => ({ ...prev, [soundId]: volume }));
+  }, []);
 
-    const supabase = createClient();
-    const { error } = await supabase.rpc("create_playback_event", {
-      p_room_id: roomId,
-      p_sound_id: sound.id,
-      p_action: "play",
-      p_volume: 1,
-      p_client_event_id: randomUUID(),
-    });
+  const handleVolumeCommit = useCallback(
+    (soundId: string, volume: number) => {
+      setSoundVolumes((prev) => ({ ...prev, [soundId]: volume }));
+      startVolumeTransition(async () => {
+        const result = await updateSoundVolume(soundId, volume);
+        if (!result.ok) {
+          setActionError({ code: result.code, message: result.error });
+        }
+      });
+    },
+    [],
+  );
 
-    if (error) {
-      const mapped = mapPlaybackError(error.message);
-      console.error("[board]", mapped.code, error.code, error.message);
-      setActionError(mapped);
-      return;
-    }
+  const emitPlay = useCallback(
+    async (sound: BoardSound) => {
+      setActionError(null);
+      if (!canPlay) {
+        setActionError(E.PLAY_DENIED);
+        return;
+      }
+      if (coolingIds[sound.id]) {
+        setActionError(
+          withMessage(
+            E.PLAY_COOLDOWN,
+            "クールダウン中です。少し待ってから押してください。",
+          ),
+        );
+        return;
+      }
 
-    startCooldown(sound.id, sound.cooldown_ms);
-  }
+      const supabase = createClient();
+      const { error } = await supabase.rpc("create_playback_event", {
+        p_room_id: roomId,
+        p_sound_id: sound.id,
+        p_action: "play",
+        p_volume: 1,
+        p_client_event_id: randomUUID(),
+      });
+
+      if (error) {
+        const mapped = mapPlaybackError(error.message);
+        console.error("[board]", mapped.code, error.code, error.message);
+        setActionError(mapped);
+        return;
+      }
+
+      startCooldown(sound.id, sound.cooldown_ms);
+    },
+    [canPlay, coolingIds, roomId, startCooldown],
+  );
 
   async function emitStopAll() {
     const supabase = createClient();
@@ -195,31 +238,49 @@ export function SoundboardApp({
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[linear-gradient(180deg,#fff7fb_0%,#eef9ff_45%,#fff7fb_100%)]">
-      <header className="flex flex-wrap items-center gap-3 border-b border-border/70 bg-white/75 px-4 py-3 backdrop-blur-sm">
-        <div className="min-w-0 flex-1">
-          <h1 className="font-display truncate text-xl font-semibold tracking-tight">
-            {roomName}
-          </h1>
-          <p className="text-xs font-bold text-muted-foreground">
-            コード {roomCode} · 大きいボタンを押すだけ
-          </p>
+      <header className="space-y-3 border-b border-border/70 bg-white/75 px-4 py-3 backdrop-blur-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display truncate text-xl font-semibold tracking-tight">
+              {roomName}
+            </h1>
+            <p className="text-xs font-bold text-muted-foreground">
+              コード {roomCode} · 招待・メンバー・サウンドはこの画面で完結
+            </p>
+          </div>
+          <ConnectionStatusBadge status={connectionStatus} />
+          {canManage && <StopAllButton onStopAll={emitStopAll} />}
         </div>
-        <ConnectionStatusBadge status={connectionStatus} />
-        {canStopAll && <StopAllButton onStopAll={emitStopAll} />}
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--hub-coral)]/25 bg-[linear-gradient(90deg,#fff7fb,#ffffff)] px-3 py-2.5">
+          <VolumeSlider
+            id="master-device-volume"
+            label="全体ボリューム"
+            value={muted ? 0 : deviceVolume}
+            onChange={(v) => {
+              setMuted(false);
+              setDeviceVolume(v);
+            }}
+            className="min-w-[14rem] flex-1"
+          />
+          <label className="flex items-center gap-2 text-sm font-bold">
+            <input
+              type="checkbox"
+              checked={muted}
+              onChange={(e) => setMuted(e.target.checked)}
+              className="size-4 accent-[var(--hub-coral)]"
+            />
+            ミュート
+          </label>
+        </div>
       </header>
 
       {(actionError || lastError) && (
         <div className="px-4 pt-3">
-          <ErrorAlert
-            error={
-              actionError ??
-              withMessage(E.PLAY_FAILED, lastError ?? E.PLAY_FAILED.message)
-            }
-          />
+          <ErrorAlert error={actionError ?? lastError} />
         </div>
       )}
 
-      <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[180px_1fr_280px]">
+      <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[160px_minmax(0,1fr)_320px]">
         <CategoryRail
           categories={categories}
           categoryId={categoryId}
@@ -234,10 +295,11 @@ export function SoundboardApp({
           />
           <SoundGrid
             sounds={filtered}
+            canManageSounds={canManage}
             emptyMessage={
               categoryId === "favorites"
-                ? "お気に入りはまだありません。ボタン右上の☆で追加できます。"
-                : "表示できるサウンドがありません。"
+                ? "お気に入りはまだありません。パッド右上の☆で追加できます。"
+                : "まだサウンドがありません。下の「サウンドの追加・削除」から初期4音やアップロードで追加してください。"
             }
             imageUrls={imageUrls}
             playingIds={playingIds}
@@ -247,39 +309,27 @@ export function SoundboardApp({
             isFavorite={isFavorite}
             onPlay={(sound) => void emitPlay(sound)}
             onToggleFavorite={toggleFavorite}
+            onVolumeChange={canManage ? handleVolumeChange : undefined}
+            onVolumeCommit={canManage ? handleVolumeCommit : undefined}
           />
 
-          <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border/80 bg-white/90 p-4">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="deviceVolume" className="font-bold">
-                端末音量 {Math.round(deviceVolume * 100)}%
-              </Label>
-              <input
-                id="deviceVolume"
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={deviceVolume}
-                onChange={(e) => setDeviceVolume(Number(e.target.value))}
-                className="w-40 accent-[var(--hub-coral)]"
-              />
-            </div>
-            <label className="flex items-center gap-2 text-sm font-bold">
-              <input
-                type="checkbox"
-                checked={muted}
-                onChange={(e) => setMuted(e.target.checked)}
-                className="size-4 accent-[var(--hub-coral)]"
-              />
-              ミュート
-            </label>
-          </div>
+          <BoardSoundsPanel
+            roomId={roomId}
+            sounds={soundsWithVolume}
+            categories={categories}
+            canUpload={canUpload}
+            canDelete={canManage}
+            canEditVolume={canManage}
+            canInstallDefaults={canManage}
+            onVolumeChange={canManage ? handleVolumeChange : undefined}
+            onVolumeCommit={canManage ? handleVolumeCommit : undefined}
+          />
         </section>
 
         <div className="space-y-4">
           <ParticipantsPanel
             roomId={roomId}
+            roomCode={roomCode}
             userId={userId}
             displayName={displayName}
             role={role}

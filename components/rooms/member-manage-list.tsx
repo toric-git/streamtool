@@ -39,11 +39,14 @@ export function MemberManageList({
   actorUserId,
   actorRole,
   members,
+  compact = false,
 }: {
   roomId: string;
   actorUserId: string;
   actorRole: RoomRole;
   members: ManageableMember[];
+  /** Narrow sidebar layout for the room board. */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<AppError | null>(null);
@@ -52,6 +55,7 @@ export function MemberManageList({
   const permissions = getPermissionsForRole(actorRole);
   const visible = filterHumanMembers(members);
   const obsCount = members.filter(isObsMember).length;
+  const showAdvanced = !compact;
 
   function run(
     action: () => Promise<
@@ -73,16 +77,16 @@ export function MemberManageList({
   }
 
   return (
-    <div className="space-y-4">
+    <div className={compact ? "space-y-2" : "space-y-4"}>
       {error && <ErrorAlert error={error} />}
       {success && <Alert>{success}</Alert>}
-      {obsCount > 0 && (
+      {!compact && obsCount > 0 && (
         <p className="text-xs text-muted-foreground">
           OBS 接続用セッション {obsCount} 件は一覧から除外しています。
         </p>
       )}
 
-      <ul className="divide-y rounded-xl border bg-card">
+      <ul className={compact ? "space-y-2" : "divide-y rounded-xl border bg-card"}>
         {visible.map((m) => {
           const manageable = canManageTarget({
             actorRole,
@@ -93,7 +97,14 @@ export function MemberManageList({
           const isSelf = m.user_id === actorUserId;
 
           return (
-            <li key={m.user_id} className="space-y-3 px-4 py-4">
+            <li
+              key={m.user_id}
+              className={
+                compact
+                  ? "space-y-2 rounded-xl border bg-background/80 px-3 py-3"
+                  : "space-y-3 px-4 py-4"
+              }
+            >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="font-medium">
@@ -101,19 +112,23 @@ export function MemberManageList({
                     {isSelf ? "（あなた）" : ""}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {ROLE_LABEL[m.role] ?? m.role} ·{" "}
-                    {new Date(m.joined_at).toLocaleString("ja-JP")}
+                    {ROLE_LABEL[m.role] ?? m.role}
+                    {!compact && (
+                      <> · {new Date(m.joined_at).toLocaleString("ja-JP")}</>
+                    )}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     再生: {m.can_play && !m.is_muted ? "可" : "不可"}
-                    {m.is_muted ? "（ミュート）" : ""} · アップロード:{" "}
-                    {m.can_upload ? "可" : "不可"}
+                    {m.is_muted ? "（ミュート）" : ""}
+                    {showAdvanced && (
+                      <> · アップロード: {m.can_upload ? "可" : "不可"}</>
+                    )}
                   </p>
                 </div>
               </div>
 
               {manageable && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {permissions.canMutePlay && (
                     <>
                       <Button
@@ -159,7 +174,7 @@ export function MemberManageList({
                     </>
                   )}
 
-                  {permissions.canManageSounds && (
+                  {showAdvanced && permissions.canManageSounds && (
                     <Button
                       type="button"
                       size="sm"
@@ -181,47 +196,60 @@ export function MemberManageList({
                     </Button>
                   )}
 
-                  {permissions.canAssignAdmin && m.role !== "admin" && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={pending}
-                      onClick={() => {
-                        if (!window.confirm(`${m.display_name} を管理者にしますか？`)) {
-                          return;
-                        }
-                        run(
-                          () => setMemberRole(roomId, m.user_id, "admin"),
-                          `${m.display_name} を管理者にしました。`,
-                        );
-                      }}
-                    >
-                      管理者に任命
-                    </Button>
-                  )}
+                  {showAdvanced &&
+                    permissions.canAssignAdmin &&
+                    m.role !== "admin" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={pending}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              `${m.display_name} を管理者にしますか？`,
+                            )
+                          ) {
+                            return;
+                          }
+                          run(
+                            () => setMemberRole(roomId, m.user_id, "admin"),
+                            `${m.display_name} を管理者にしました。`,
+                          );
+                        }}
+                      >
+                        管理者に任命
+                      </Button>
+                    )}
 
-                  {permissions.canAssignAdmin && m.role === "admin" && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={pending}
-                      onClick={() => {
-                        if (!window.confirm(`${m.display_name} をメンバーに戻しますか？`)) {
-                          return;
-                        }
-                        run(
-                          () => setMemberRole(roomId, m.user_id, "member"),
-                          `${m.display_name} をメンバーに戻しました。`,
-                        );
-                      }}
-                    >
-                      管理者を解除
-                    </Button>
-                  )}
+                  {showAdvanced &&
+                    permissions.canAssignAdmin &&
+                    m.role === "admin" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={pending}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              `${m.display_name} をメンバーに戻しますか？`,
+                            )
+                          ) {
+                            return;
+                          }
+                          run(
+                            () => setMemberRole(roomId, m.user_id, "member"),
+                            `${m.display_name} をメンバーに戻しました。`,
+                          );
+                        }}
+                      >
+                        管理者を解除
+                      </Button>
+                    )}
 
-                  {actorRole === "owner" &&
+                  {showAdvanced &&
+                    actorRole === "owner" &&
                     (m.role === "admin" || m.role === "member") && (
                       <Button
                         type="button"

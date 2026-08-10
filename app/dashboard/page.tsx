@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions/auth";
+import {
+  getChosenDisplayName,
+  needsDisplayNameSetup,
+  PLACEHOLDER_DISPLAY_NAME,
+} from "@/lib/auth/display-name";
 import { APP_NAME } from "@/lib/app-config";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
@@ -22,11 +27,22 @@ export default async function DashboardPage() {
     redirect("/login?next=/dashboard");
   }
 
+  if (needsDisplayNameSetup(user)) {
+    redirect("/onboarding/name?next=/dashboard");
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("display_name")
     .eq("id", user.id)
     .maybeSingle();
+
+  const welcomeName =
+    getChosenDisplayName(user) ??
+    (profile?.display_name && profile.display_name !== PLACEHOLDER_DISPLAY_NAME
+      ? profile.display_name
+      : null) ??
+    "ユーザー";
 
   const { data: memberships, error } = await supabase
     .from("room_members")
@@ -62,7 +78,7 @@ export default async function DashboardPage() {
             マイ部屋
           </h1>
           <p className="mt-1 font-semibold text-muted-foreground">
-            ようこそ、{profile?.display_name ?? "ユーザー"} さん。部屋を開いてすぐ押せます。
+            ようこそ、{welcomeName} さん。部屋を開いてすぐ押せます。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

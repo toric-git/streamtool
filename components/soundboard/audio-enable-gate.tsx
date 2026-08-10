@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { ErrorAlert } from "@/components/ui/error-alert";
-import { E, withMessage } from "@/lib/errors/catalog";
+import type { AppError } from "@/lib/errors/catalog";
 
 export function AudioEnableGate({
   onEnable,
@@ -11,7 +11,7 @@ export function AudioEnableGate({
 }: {
   onEnable: () => void | Promise<void>;
   pending?: boolean;
-  error?: string | null;
+  error?: AppError | null;
 }) {
   return (
     <div className="flex min-h-[40vh] w-full max-w-md flex-col items-center justify-center gap-4 rounded-3xl border border-border bg-white/90 p-8 text-center">
@@ -21,12 +21,7 @@ export function AudioEnableGate({
       <p className="max-w-md text-sm font-semibold leading-relaxed text-muted-foreground">
         ブラウザの制限で、最初にワンタップが必要です。押したらすぐにボードが使えます。
       </p>
-      {error && (
-        <ErrorAlert
-          error={withMessage(E.AUDIO_UNLOCK_FAILED, error)}
-          className="text-left"
-        />
-      )}
+      {error && <ErrorAlert error={error} className="text-left" />}
       <Button
         type="button"
         size="lg"

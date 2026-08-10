@@ -1,8 +1,23 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { CreateRoomForm } from "@/components/rooms/create-room-form";
 import { Button } from "@/components/ui/button";
+import { needsDisplayNameSetup } from "@/lib/auth/display-name";
+import { createClient } from "@/lib/supabase/server";
 
-export default function NewRoomPage() {
+export default async function NewRoomPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login?next=/rooms/new");
+  }
+  if (needsDisplayNameSetup(user)) {
+    redirect("/onboarding/name?next=/rooms/new");
+  }
+
   return (
     <main className="mx-auto w-full max-w-xl flex-1 px-4 py-10">
       <div className="mb-6 flex items-center justify-between gap-3">

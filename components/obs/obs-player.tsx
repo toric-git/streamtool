@@ -158,7 +158,11 @@ export function ObsPlayer({
           <p>status: {connectionStatus}</p>
           <p>audio: {audioUnlocked ? "unlocked" : "locked"}</p>
           <p>last: {lastEvent?.action ?? "-"} / {history[0]?.soundId?.slice(0, 8) ?? "-"}</p>
-          {lastError && <p>err: {lastError}</p>}
+          {lastError && (
+            <p>
+              err: {lastError.code} {lastError.message}
+            </p>
+          )}
         </div>
       )}
     </div>

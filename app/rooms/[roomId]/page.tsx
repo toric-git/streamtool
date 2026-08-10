@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { leaveRoom } from "@/app/actions/rooms";
-import { InviteDialog } from "@/components/rooms/invite-dialog";
 import { SoundboardApp } from "@/components/soundboard/soundboard-app";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
 import { mapRoomPageError } from "@/lib/errors/messages";
 import { getPermissionsForRole } from "@/lib/permissions/room-permissions";
 import { requireRoomActor } from "@/lib/supabase/auth-context";
+import type { RoomRole } from "@/types/database";
 
 type Props = {
   params: Promise<{ roomId: string }>;
@@ -30,7 +30,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
   const { data: room } = await supabase
     .from("rooms")
     .select(
-      "id, name, description, room_code, master_volume, guest_can_play, max_simultaneous_sounds",
+      "id, name, description, room_code, master_volume, guest_can_play, max_simultaneous_sounds, upload_enabled",
     )
     .eq("id", roomId)
     .maybeSingle();
@@ -39,7 +39,9 @@ export default async function RoomPage({ params, searchParams }: Props) {
 
   const { data: members } = await supabase
     .from("room_members")
-    .select("user_id, display_name, role, can_play, is_muted")
+    .select(
+      "user_id, display_name, role, can_play, can_upload, is_muted, joined_at",
+    )
     .eq("room_id", roomId)
     .order("joined_at", { ascending: true });
 
@@ -64,20 +66,13 @@ export default async function RoomPage({ params, searchParams }: Props) {
   return (
     <main className="relative flex min-h-full flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b bg-background/80 px-4 py-2">
-        <InviteDialog roomCode={room.room_code} />
         {permissions.canEditRoom && (
           <Button asChild variant="outline" size="sm">
-            <Link href={`/rooms/${roomId}/settings`}>設定</Link>
+            <Link href={`/rooms/${roomId}/settings`}>部屋設定</Link>
           </Button>
         )}
-        <Button asChild variant="outline" size="sm">
-          <Link href={`/rooms/${roomId}/members`}>メンバー</Link>
-        </Button>
-        <Button asChild variant="outline" size="sm">
-          <Link href={`/rooms/${roomId}/sounds`}>サウンド</Link>
-        </Button>
         <Button asChild variant="ghost" size="sm">
-          <Link href="/dashboard">ダッシュボード</Link>
+          <Link href="/dashboard">ルーム一覧</Link>
         </Button>
         {membership.role !== "owner" && (
           <form
@@ -106,14 +101,24 @@ export default async function RoomPage({ params, searchParams }: Props) {
         masterVolume={Number(room.master_volume)}
         maxSimultaneous={room.max_simultaneous_sounds}
         guestCanPlay={room.guest_can_play}
+        uploadEnabled={room.upload_enabled}
         role={membership.role}
         canPlayFlag={membership.can_play}
+        canUploadFlag={membership.can_upload}
         isMuted={membership.is_muted}
         userId={user.id}
         displayName={membership.display_name}
         sounds={sounds ?? []}
         categories={categories ?? []}
-        members={members ?? []}
+        members={(members ?? []).map((m) => ({
+          user_id: m.user_id,
+          display_name: m.display_name,
+          role: m.role as RoomRole,
+          can_play: m.can_play,
+          can_upload: m.can_upload,
+          is_muted: m.is_muted,
+          joined_at: m.joined_at,
+        }))}
       />
     </main>
   );
