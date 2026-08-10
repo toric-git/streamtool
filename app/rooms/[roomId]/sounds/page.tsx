@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createCategory } from "@/app/actions/categories";
+import { InstallDefaultSoundsButton } from "@/components/sounds/install-default-sounds-button";
 import { PendingSoundList } from "@/components/sounds/pending-sound-list";
 import { SoundManageList } from "@/components/sounds/sound-manage-list";
 import { SoundUploadForm } from "@/components/sounds/sound-upload-form";
@@ -71,6 +72,8 @@ export default async function SoundsPage({ params }: Props) {
         categories={categories ?? []}
         canUpload={canUpload}
       />
+
+      {canManage && <InstallDefaultSoundsButton roomId={roomId} />}
 
       {canManage && (
         <section className="space-y-3">

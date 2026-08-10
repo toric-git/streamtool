@@ -227,6 +227,18 @@ export const E = {
     "E4024",
     "アップロード用URLの取得に失敗しました。",
   ),
+  SOUND_SEED_FORBIDDEN: e(
+    "E4025",
+    "配信サンプル音を追加できるのはオーナーまたは管理者のみです。",
+  ),
+  SOUND_SEED_FAILED: e(
+    "E4026",
+    "配信サンプル音の追加に失敗しました。時間をおいて再試行してください。",
+  ),
+  SOUND_SEED_NONE: e(
+    "E4027",
+    "追加できるサンプルがありません（同名の音が既に登録済みです）。",
+  ),
 
   // --- Categories E45xx ---
   CATEGORY_FORBIDDEN: e("E4501", "カテゴリー作成権限がありません。"),
@@ -250,6 +262,10 @@ export const E = {
     "テスト再生する承認済みサウンドがありません。",
   ),
   PLAY_TEST_FAILED: e("E5007", "テスト再生の送信に失敗しました。"),
+  AUDIO_UNLOCK_FAILED: e(
+    "E5008",
+    "音声の有効化に失敗しました。ブラウザの設定を確認してください。",
+  ),
 
   // --- OBS E60xx ---
   OBS_ISSUE_FORBIDDEN: e(

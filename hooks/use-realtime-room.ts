@@ -54,6 +54,7 @@ export function useRealtimeRoom({
   const engineRef = useRef<AudioEngineLike | null>(null);
   const soundsRef = useRef(sounds);
   const memberNamesRef = useRef(memberNames);
+  const volumeLayersRef = useRef({ roomVolume, deviceOrObsVolume });
 
   useEffect(() => {
     soundsRef.current = sounds;
@@ -62,6 +63,10 @@ export function useRealtimeRoom({
   useEffect(() => {
     memberNamesRef.current = memberNames;
   }, [memberNames]);
+
+  useEffect(() => {
+    volumeLayersRef.current = { roomVolume, deviceOrObsVolume };
+  }, [roomVolume, deviceOrObsVolume]);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -82,14 +87,14 @@ export function useRealtimeRoom({
     engineRef.current = new AudioEngine({
       maxSimultaneous,
       getSignedUrl,
-      volumeLayers: { roomVolume, deviceOrObsVolume },
+      volumeLayers: { ...volumeLayersRef.current },
     });
 
     return () => {
       engineRef.current?.dispose();
       engineRef.current = null;
     };
-  }, [roomId, maxSimultaneous, isObs, obsToken, roomVolume, deviceOrObsVolume]);
+  }, [roomId, maxSimultaneous, isObs, obsToken]);
 
   useEffect(() => {
     engineRef.current?.setVolumeLayers({ roomVolume, deviceOrObsVolume });
@@ -202,12 +207,19 @@ export function useRealtimeRoom({
   }, [audioUnlocked, enabled, sounds]);
 
   async function unlockAudio() {
-    const ok = await engineRef.current?.unlock();
-    setAudioUnlocked(Boolean(ok));
+    const engine = engineRef.current;
+    if (!engine) {
+      setLastError("音声エンジンの準備ができていません。もう一度タップしてください。");
+      return false;
+    }
+    const ok = await engine.unlock();
+    setAudioUnlocked(ok);
     if (!ok) {
       setLastError("音声の有効化に失敗しました。ブラウザの設定を確認してください。");
+    } else {
+      setLastError(null);
     }
-    return Boolean(ok);
+    return ok;
   }
 
   return {

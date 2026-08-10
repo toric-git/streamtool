@@ -1,5 +1,22 @@
-import { Howl } from "howler";
+import { Howl, Howler } from "howler";
 import { computePlaybackGain } from "@/lib/audio/playback-math";
+
+/** Valid PCM WAV (16-bit mono silence). Empty data chunks trigger load errors in some browsers. */
+const SILENT_WAV =
+  "data:audio/wav;base64,UklGRqQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+
+async function resumeHowlerContext(): Promise<boolean> {
+  try {
+    const ctx = Howler.ctx;
+    if (!ctx) return false;
+    if (ctx.state === "suspended") {
+      await ctx.resume();
+    }
+    return ctx.state === "running";
+  } catch {
+    return false;
+  }
+}
 
 export type AudioEngineOptions = {
   maxSimultaneous: number;
@@ -56,35 +73,62 @@ export class AudioEngine implements AudioEngineLike {
   async unlock(): Promise<boolean> {
     if (this.unlocked) return true;
 
-    return new Promise((resolve) => {
-      const howl = new Howl({
-        src: [
-          "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=",
-        ],
-        volume: 0.001,
-        onend: () => {
-          this.unlocked = true;
-          howl.unload();
-          resolve(true);
-        },
-        onloaderror: () => {
-          howl.unload();
-          resolve(false);
-        },
-        onplayerror: () => {
-          howl.unload();
-          resolve(false);
-        },
-      });
-      howl.play();
-      // Fallback if silent clip ends instantly without event in some browsers
-      setTimeout(() => {
-        if (!this.unlocked) {
-          this.unlocked = true;
-          resolve(true);
+    try {
+      // Called from an explicit user gesture (AudioEnableGate). Prefer success after
+      // attempting silent playback + AudioContext resume — do not fail on flaky
+      // load/end events for tiny clips (previous empty WAV caused false E5004s).
+      await new Promise<void>((resolve) => {
+        let done = false;
+        let howl: Howl | null = null;
+
+        const doneOnce = () => {
+          if (done) return;
+          done = true;
+          try {
+            howl?.unload();
+          } catch {
+            /* ignore */
+          }
+          resolve();
+        };
+
+        howl = new Howl({
+          src: [SILENT_WAV],
+          format: ["wav"],
+          volume: 0,
+          onplay: doneOnce,
+          onend: doneOnce,
+          onloaderror: () => {
+            void resumeHowlerContext().finally(doneOnce);
+          },
+          onplayerror: () => {
+            howl?.once("unlock", () => {
+              try {
+                howl?.play();
+              } catch {
+                /* ignore */
+              }
+            });
+            void resumeHowlerContext().finally(doneOnce);
+          },
+        });
+
+        void resumeHowlerContext();
+        try {
+          howl.play();
+        } catch {
+          doneOnce();
         }
-      }, 300);
-    });
+
+        setTimeout(doneOnce, 400);
+      });
+
+      this.unlocked = true;
+      return true;
+    } catch (err) {
+      console.error("[audio] unlock failed", err);
+      return false;
+    }
   }
 
   async preload(soundId: string, audioPath: string): Promise<void> {

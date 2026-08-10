@@ -11,6 +11,7 @@ import {
 import { E, withMessage } from "@/lib/errors/catalog";
 import { verifyStoredAudio, verifyStoredImage } from "@/lib/media/verify-stored";
 import { isOwnerOrAdmin } from "@/lib/permissions/room-permissions";
+import { seedDefaultSounds } from "@/lib/sounds/seed-default-sounds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getSessionUser,
@@ -355,4 +356,31 @@ export async function reorderSoundsAction(
   }
   revalidateSounds(roomId);
   return actionOk();
+}
+
+export async function installDefaultStreamSounds(
+  roomId: string,
+): Promise<ActionResult<{ seeded: number; skipped: number }>> {
+  const actor = await requireRoomActor(roomId);
+  if (!actor.ok) return actionFailFrom(actor);
+  if (!isOwnerOrAdmin(actor.membership.role)) {
+    return actionFail(E.SOUND_SEED_FORBIDDEN);
+  }
+
+  try {
+    const admin = createAdminClient();
+    const result = await seedDefaultSounds({
+      admin,
+      roomId,
+      ownerId: actor.user.id,
+    });
+    if (result.seeded === 0) {
+      return actionFail(E.SOUND_SEED_NONE);
+    }
+    revalidateSounds(roomId);
+    return actionOk({ seeded: result.seeded, skipped: result.skipped });
+  } catch (err) {
+    console.error("[sounds] seed defaults failed", err);
+    return actionFail(E.SOUND_SEED_FAILED);
+  }
 }

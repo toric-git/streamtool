@@ -22,7 +22,10 @@ export function AudioEnableGate({
         ブラウザの制限で、最初にワンタップが必要です。押したらすぐにボードが使えます。
       </p>
       {error && (
-        <ErrorAlert error={withMessage(E.PLAY_FAILED, error)} className="text-left" />
+        <ErrorAlert
+          error={withMessage(E.AUDIO_UNLOCK_FAILED, error)}
+          className="text-left"
+        />
       )}
       <Button
         type="button"

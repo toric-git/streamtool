@@ -12,6 +12,7 @@ import {
 import { E, withMessage } from "@/lib/errors/catalog";
 import { mapRoomJoinError } from "@/lib/errors/messages";
 import { buildInviteUrl, generateRoomCode } from "@/lib/rooms/codes";
+import { seedDefaultSounds } from "@/lib/sounds/seed-default-sounds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getSessionUser,
@@ -153,6 +154,18 @@ export async function createRoom(
     );
     await admin.from("rooms").delete().eq("id", roomId);
     return actionFail(E.ROOM_CREATE_MEMBER);
+  }
+
+  try {
+    const seeded = await seedDefaultSounds({
+      admin,
+      roomId,
+      ownerId: user.id,
+    });
+    console.info("[rooms] default sounds", seeded);
+  } catch (err) {
+    // Room is usable without defaults; owner can add samples from サウンド管理.
+    console.error("[rooms] default sounds seed failed", err);
   }
 
   revalidatePath("/dashboard");
