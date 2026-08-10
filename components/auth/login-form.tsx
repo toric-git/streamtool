@@ -9,7 +9,6 @@ import {
   type AuthActionState,
 } from "@/app/actions/auth";
 import { createClient } from "@/lib/supabase/client";
-import { APP_NAME } from "@/lib/app-config";
 import { Alert } from "@/components/ui/alert";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import {
   deleteSound,
   renameSound,
@@ -87,7 +87,9 @@ export function SoundboardApp({
   );
   // If the board opened before categories existed, we fell back to favorites.
   // Switch to the first pad sheet once categories arrive (unless user picks favorites later).
-  const pendingPadFallbackRef = useRef(categories.length === 0);
+  const [pendingPadFallback, setPendingPadFallback] = useState(
+    () => categories.length === 0,
+  );
   const [actionError, setActionError] = useState<AppError | null>(null);
   const [, startVolumeTransition] = useTransition();
   const { coolingIds, cooldownProgress, isCooling, tryStartCooldown } =
@@ -120,22 +122,26 @@ export function SoundboardApp({
     uploadEnabled,
   });
 
-  useEffect(() => {
-    if (liveCategories.length === 0) return;
+  const firstLiveCategoryId = liveCategories[0]?.id ?? "favorites";
+  const categoryValid =
+    categoryId === "favorites" ||
+    liveCategories.some((c) => c.id === categoryId);
 
-    if (pendingPadFallbackRef.current) {
-      pendingPadFallbackRef.current = false;
+  if (pendingPadFallback && liveCategories.length > 0) {
+    setPendingPadFallback(false);
+    if (categoryId !== liveCategories[0]!.id) {
       setCategoryId(liveCategories[0]!.id);
-      return;
     }
-
-    if (categoryId === "favorites") return;
-    if (liveCategories.some((c) => c.id === categoryId)) return;
-    setCategoryId(liveCategories[0]?.id ?? "favorites");
-  }, [liveCategories, categoryId]);
+  } else if (
+    liveCategories.length > 0 &&
+    !categoryValid &&
+    categoryId !== firstLiveCategoryId
+  ) {
+    setCategoryId(firstLiveCategoryId);
+  }
 
   function handleCategoryChange(id: CategoryFilter) {
-    pendingPadFallbackRef.current = false;
+    setPendingPadFallback(false);
     setCategoryId(id);
   }
 

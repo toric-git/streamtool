@@ -183,10 +183,13 @@ export function SoundGrid({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [listeningHotkey, setListeningHotkey] = useState(false);
-  const [hotkeysEnabled, setHotkeysEnabled] = useState(true);
-  const [hotkeyBindings, setHotkeyBindings] = useState<
-    Record<string, PadHotkey>
-  >({});
+  const [keybindRoomId, setKeybindRoomId] = useState(roomId);
+  const [hotkeysEnabled, setHotkeysEnabled] = useState(
+    () => loadPadKeybinds(roomId).enabled,
+  );
+  const [hotkeyBindings, setHotkeyBindings] = useState<Record<string, PadHotkey>>(
+    () => loadPadKeybinds(roomId).bindings,
+  );
   const [pending, startTransition] = useTransition();
   const allowAdd = canUpload && showAddSlots;
   const canEdit = Boolean(onDelete || onRename);
@@ -201,11 +204,12 @@ export function SoundGrid({
     [sounds, editingId],
   );
 
-  useEffect(() => {
+  if (roomId !== keybindRoomId) {
     const stored = loadPadKeybinds(roomId);
+    setKeybindRoomId(roomId);
     setHotkeysEnabled(stored.enabled);
     setHotkeyBindings(stored.bindings);
-  }, [roomId]);
+  }
 
   const persistKeybinds = useCallback(
     (enabled: boolean, bindings: Record<string, PadHotkey>) => {
@@ -245,14 +249,14 @@ export function SoundGrid({
     setAddOpen(true);
   }
 
-  function closeAddDialog() {
+  const closeAddDialog = useCallback(() => {
     setAddOpen(false);
     setAddStep("chooser");
     setAddError(null);
     setAddingPresetFile(null);
     setLibraryQuery("");
     stopLibraryPreview();
-  }
+  }, []);
 
   async function openPresetStep() {
     setAddError(null);
@@ -477,7 +481,7 @@ export function SoundGrid({
     }
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
-  }, [addOpen, addStep]);
+  }, [addOpen, addStep, closeAddDialog]);
 
   // One colorless "+" pad at the end of the row (not a full empty grid).
   const emptySlotCount = allowAdd ? 1 : 0;

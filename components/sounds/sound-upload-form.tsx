@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { createSound } from "@/app/actions/sounds";
 import { readAudioDurationMs, previewAudioFile } from "@/lib/audio/browser-meta";
 import {
@@ -79,15 +79,8 @@ export function SoundUploadForm({
   const [imageFileName, setImageFileName] = useState<string | null>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const defaultColor = useMemo(
-    () =>
-      CUTE_BUTTON_COLORS[
-        Math.floor(Math.random() * CUTE_BUTTON_COLORS.length)
-      ]!,
-    [],
-  );
-  const [buttonColor, setButtonColor] = useState(defaultColor.hex);
-  const [textColor, setTextColor] = useState(defaultColor.text);
+  const [buttonColor, setButtonColor] = useState(CUTE_BUTTON_COLORS[0]!.hex);
+  const [textColor, setTextColor] = useState(CUTE_BUTTON_COLORS[0]!.text);
   const audioInputId = compact ? "board-audio" : "audio";
   const nameInputId = compact ? "board-sound-name" : "name";
   const imageInputId = "image";

@@ -21,13 +21,12 @@ export function JoinRoomForm({
   roomCode,
   info,
   isAuthenticated,
-  isAnonymous,
   suggestedDisplayName = "",
 }: {
   roomCode: string;
   info: JoinInfo | null;
   isAuthenticated: boolean;
-  isAnonymous: boolean;
+  isAnonymous?: boolean;
   suggestedDisplayName?: string;
 }) {
   const [error, setError] = useState<AppError | null>(null);

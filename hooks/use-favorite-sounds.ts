@@ -37,10 +37,15 @@ export function useFavoriteSounds(roomId: string) {
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() =>
     readLocal(roomId),
   );
+  const [activeRoomId, setActiveRoomId] = useState(roomId);
   const [, startTransition] = useTransition();
 
-  useEffect(() => {
+  if (roomId !== activeRoomId) {
+    setActiveRoomId(roomId);
     setFavoriteIds(readLocal(roomId));
+  }
+
+  useEffect(() => {
     let cancelled = false;
     startTransition(async () => {
       const result = await listFavoriteSoundIds(roomId);

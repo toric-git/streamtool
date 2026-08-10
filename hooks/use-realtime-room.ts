@@ -68,14 +68,16 @@ export function useRealtimeRoom({
     obsToken,
   });
   const soundIdsKey = sounds.map((s) => s.id).join(",");
+  const [preloadSoundIdsKey, setPreloadSoundIdsKey] = useState(soundIdsKey);
+
+  if (soundIdsKey !== preloadSoundIdsKey) {
+    setPreloadSoundIdsKey(soundIdsKey);
+    setPreloadState("idle");
+  }
 
   useEffect(() => {
     soundsRef.current = sounds;
   }, [sounds]);
-
-  useEffect(() => {
-    setPreloadState("idle");
-  }, [soundIdsKey]);
 
   useEffect(() => {
     memberNamesRef.current = memberNames;
@@ -123,8 +125,6 @@ export function useRealtimeRoom({
       engineRef.current = null;
       setAudioUnlocked(false);
     };
-    // ensureEngine reads latest options from refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recreate only when identity deps change
   }, [roomId, maxSimultaneous, isObs, obsToken]);
 
   useEffect(() => {

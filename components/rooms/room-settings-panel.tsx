@@ -41,17 +41,22 @@ export function RoomSettingsPanel({
   payload: RoomSettingsPayload;
   defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(
+    () => defaultOpen || false,
+  );
   const titleId = useId();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const settingsQueryOpen = searchParams.get("settings") === "1";
+  const [sawSettingsQuery, setSawSettingsQuery] = useState(settingsQueryOpen);
 
-  useEffect(() => {
-    if (searchParams.get("settings") === "1") {
+  if (settingsQueryOpen !== sawSettingsQuery) {
+    setSawSettingsQuery(settingsQueryOpen);
+    if (settingsQueryOpen) {
       setOpen(true);
     }
-  }, [searchParams]);
+  }
 
   function close() {
     setOpen(false);

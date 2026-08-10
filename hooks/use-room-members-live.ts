@@ -19,11 +19,13 @@ export function useRoomMembersLive(
   initialMembers: LiveMember[],
 ) {
   const [members, setMembers] = useState(initialMembers);
+  const [prevInitialMembers, setPrevInitialMembers] = useState(initialMembers);
   const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
+  if (initialMembers !== prevInitialMembers) {
+    setPrevInitialMembers(initialMembers);
     setMembers(initialMembers);
-  }, [initialMembers]);
+  }
 
   useEffect(() => {
     if (!roomId) return;

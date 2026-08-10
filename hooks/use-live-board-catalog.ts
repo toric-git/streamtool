@@ -49,15 +49,19 @@ export function useLiveBoardCatalog(
 ) {
   const [sounds, setSounds] = useState(initialSounds);
   const [categories, setCategories] = useState(initialCategories);
+  const [prevInitialSounds, setPrevInitialSounds] = useState(initialSounds);
+  const [prevInitialCategories, setPrevInitialCategories] =
+    useState(initialCategories);
   const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
+  if (initialSounds !== prevInitialSounds) {
+    setPrevInitialSounds(initialSounds);
     setSounds(initialSounds);
-  }, [initialSounds]);
-
-  useEffect(() => {
+  }
+  if (initialCategories !== prevInitialCategories) {
+    setPrevInitialCategories(initialCategories);
     setCategories(initialCategories);
-  }, [initialCategories]);
+  }
 
   useEffect(() => {
     if (!roomId) return;
