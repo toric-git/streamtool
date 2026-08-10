@@ -5,6 +5,24 @@ import { Button } from "@/components/ui/button";
 import { APP_NAME, APP_TAGLINE } from "@/lib/app-config";
 import { TOOLS } from "@/lib/tools";
 
+const FIRST_STEPS = [
+  {
+    step: "1",
+    title: "新規登録する",
+    body: "メールか Google でアカウントを作り、表示名を決めます。はじめての方はここから。",
+  },
+  {
+    step: "2",
+    title: "部屋をつくる",
+    body: "ダッシュボードから部屋を作成。最初から効果音パッドが用意されています。",
+  },
+  {
+    step: "3",
+    title: "仲間を呼んで押す",
+    body: "招待リンクを共有すれば、参加者みんなの端末と OBS で同じ音が鳴ります。",
+  },
+] as const;
+
 export default function HomePage() {
   return (
     <main className="relative flex min-h-full flex-1 flex-col">
@@ -38,11 +56,11 @@ export default function HomePage() {
               {APP_TAGLINE}
             </h1>
             <p className="max-w-lg text-base font-semibold leading-relaxed text-foreground/70 sm:text-lg">
-              押す・聞く・伝える。配信の手元ツールを、わかりやすくひとつに。
+              効果音を、配信者と視聴者側の端末で同時に鳴らすツールです。
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
               <Button asChild size="lg" className="font-bold shadow-none">
-                <Link href="/tools/soundboard">サウンドボードを使う</Link>
+                <Link href="/login?mode=signup">無料で新規登録</Link>
               </Button>
               <Button
                 asChild
@@ -50,9 +68,54 @@ export default function HomePage() {
                 variant="secondary"
                 className="font-bold shadow-none"
               >
-                <Link href="#tools">ツールを見る</Link>
+                <Link href="/login">ログイン</Link>
               </Button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="start"
+        className="relative border-t border-border/70 bg-white px-6 py-16 md:px-10"
+      >
+        <div className="mx-auto w-full max-w-5xl">
+          <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">
+            はじめての方へ
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-muted-foreground sm:text-base">
+            むずかしい設定は不要です。アカウントを作って部屋を開き、ボタンを押すだけ。
+            招待されただけの人も、リンクを開けば表示名を入れて参加できます。
+          </p>
+
+          <ol className="mt-10 grid gap-8 md:grid-cols-3 md:gap-6">
+            {FIRST_STEPS.map((item) => (
+              <li key={item.step} className="space-y-2">
+                <p className="font-display text-4xl font-semibold text-[var(--hub-coral)]">
+                  {item.step}
+                </p>
+                <h3 className="text-lg font-extrabold tracking-tight">
+                  {item.title}
+                </h3>
+                <p className="text-sm font-semibold leading-relaxed text-muted-foreground">
+                  {item.body}
+                </p>
+              </li>
+            ))}
+          </ol>
+
+          <div className="mt-10 flex flex-wrap gap-3">
+            <Button asChild size="lg" className="font-bold shadow-none">
+              <Link href="/login?mode=signup">新規登録してはじめる</Link>
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="font-bold shadow-none"
+            >
+              <Link href="/tools/soundboard">サウンドボードの説明を見る</Link>
+            </Button>
           </div>
         </div>
       </section>

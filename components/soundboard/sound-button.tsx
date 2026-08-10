@@ -46,8 +46,8 @@ export function SoundButton({
       disabled={isDisabled}
       onClick={onPress}
       className={cn(
-        "group relative flex aspect-square w-full min-h-[7.5rem] flex-col overflow-hidden rounded-[1.35rem] border-2 border-white/80 px-3 pb-3 pt-2.5 text-left shadow-[0_10px_24px_-16px_rgba(255,77,141,0.55)] transition duration-150",
-        "hover:-translate-y-0.5 hover:brightness-[1.04] hover:shadow-[0_16px_28px_-14px_rgba(255,77,141,0.45)]",
+        "group relative flex aspect-square w-full min-h-[7.5rem] flex-col overflow-hidden rounded-[1.6rem] border-[3px] border-white/90 px-3 pb-3 pt-2.5 text-left shadow-[0_12px_28px_-14px_rgba(255,107,157,0.55)] transition duration-150",
+        "hover:-translate-y-1 hover:brightness-[1.06] hover:shadow-[0_18px_32px_-12px_rgba(255,107,157,0.5)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "active:translate-y-0 active:scale-[0.97]",
         state === "playing" && "ring-4 ring-[var(--hub-sky)] ring-offset-2",
@@ -58,7 +58,7 @@ export function SoundButton({
       style={{
         background: imageUrl
           ? undefined
-          : `linear-gradient(155deg, color-mix(in srgb, ${buttonColor} 58%, white) 0%, ${buttonColor} 48%, color-mix(in srgb, ${buttonColor} 82%, #1f1630) 100%)`,
+          : `linear-gradient(160deg, color-mix(in srgb, ${buttonColor} 28%, white) 0%, color-mix(in srgb, ${buttonColor} 72%, #fff7fb) 42%, ${buttonColor} 100%)`,
         color: textColor,
       }}
     >
@@ -73,7 +73,11 @@ export function SoundButton({
       {imageUrl && <span className="absolute inset-0 bg-black/40" aria-hidden />}
 
       <span
-        className="pointer-events-none absolute inset-x-3 top-2 h-10 rounded-full bg-white/25 blur-md"
+        className="pointer-events-none absolute -right-4 -top-6 size-20 rounded-full bg-white/35 blur-2xl"
+        aria-hidden
+      />
+      <span
+        className="pointer-events-none absolute inset-x-3 top-2 h-10 rounded-full bg-white/35 blur-md"
         aria-hidden
       />
 

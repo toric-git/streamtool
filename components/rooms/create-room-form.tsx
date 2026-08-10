@@ -65,15 +65,6 @@ export function CreateRoomForm() {
           <input type="checkbox" name="uploadEnabled" className="size-4" />
           メンバーの音声アップロードを許可
         </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="uploadRequiresApproval"
-            defaultChecked
-            className="size-4"
-          />
-          アップロードは承認が必要
-        </label>
       </fieldset>
 
       <Button type="submit" disabled={pending} className="w-full sm:w-auto">

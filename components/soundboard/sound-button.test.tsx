@@ -7,7 +7,7 @@ describe("SoundButton", () => {
     render(
       <SoundButton
         name="拍手"
-        buttonColor="#334155"
+        buttonColor="#ff6b9d"
         textColor="#ffffff"
         hotkey="1"
         state="cooldown"

@@ -23,11 +23,8 @@ export function SiteHeader({
         <Button asChild variant="ghost" className="font-semibold">
           <Link href="/login">ログイン</Link>
         </Button>
-        <Button asChild variant="secondary" className="font-semibold shadow-none">
-          <Link href="/login?mode=signup">サインイン</Link>
-        </Button>
         <Button asChild className="font-semibold shadow-none">
-          <Link href="/tools/soundboard">はじめる</Link>
+          <Link href="/login?mode=signup">新規登録</Link>
         </Button>
       </div>
     </header>

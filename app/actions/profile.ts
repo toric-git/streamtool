@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   actionFail,
@@ -66,13 +67,34 @@ export async function updateDisplayNameAction(
       );
       return actionFail(E.PROFILE_NAME_UPDATE_FAILED);
     }
+
+    // Keep room participant lists in sync for all members.
+    const { error: memberError } = await admin
+      .from("room_members")
+      .update({ display_name: displayName })
+      .eq("user_id", user.id);
+    if (memberError) {
+      console.error(
+        "[profile]",
+        E.PROFILE_NAME_UPDATE_FAILED.code,
+        memberError.code,
+        memberError.message,
+      );
+      return actionFail(E.PROFILE_NAME_UPDATE_FAILED);
+    }
   } catch (err) {
     console.error("[profile]", E.PROFILE_NAME_UPDATE_FAILED.code, err);
     return actionFail(E.PROFILE_NAME_UPDATE_FAILED);
   }
 
-  const nextRaw = String(formData.get("next") || "/dashboard");
-  const next = nextRaw.startsWith("/") ? nextRaw : "/dashboard";
-  redirect(next);
+  revalidatePath("/dashboard");
+  revalidatePath("/onboarding/name");
+  revalidatePath("/rooms", "layout");
+
+  const nextRaw = String(formData.get("next") ?? "").trim();
+  if (nextRaw.startsWith("/")) {
+    redirect(nextRaw);
+  }
+
   return actionOk();
 }

@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth/display-name";
 import { APP_NAME } from "@/lib/app-config";
 import { createClient } from "@/lib/supabase/server";
+import { UserSettingsPanel } from "@/components/auth/user-settings-panel";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -82,6 +83,7 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <UserSettingsPanel displayName={welcomeName} />
           <Button asChild className="font-bold shadow-none">
             <Link href="/rooms/new">部屋を作成</Link>
           </Button>

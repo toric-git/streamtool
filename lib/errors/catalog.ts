@@ -209,15 +209,19 @@ export const E = {
     "E4010",
     "データベース上の削除は成功しましたが、ファイル削除に失敗しました。時間をおいて再試行するか管理者に連絡してください。",
   ),
+  // Kept for stable codes; approval UI/actions removed (uploads auto-approve).
   SOUND_APPROVE_FAILED: e(
     "E4011",
-    "承認に失敗しました。権限を確認してください。",
+    "承認機能は利用できません（アップロードは即時反映です）。",
   ),
   SOUND_REJECT_FAILED: e(
     "E4012",
-    "却下に失敗しました。権限を確認してください。",
+    "却下機能は利用できません（アップロードは即時反映です）。",
   ),
-  SOUND_REORDER_FAILED: e("E4013", "並び替えに失敗しました。"),
+  SOUND_REORDER_FAILED: e(
+    "E4013",
+    "並び替え機能は現在利用できません。",
+  ),
   SOUND_FILE_REQUIRED: e("E4014", "音声ファイルを選択してください。"),
   SOUND_DURATION_READ: e(
     "E4015",
@@ -273,9 +277,14 @@ export const E = {
   ),
 
   // --- Categories E45xx ---
-  CATEGORY_FORBIDDEN: e("E4501", "カテゴリー作成権限がありません。"),
-  CATEGORY_NAME_INVALID: e("E4502", "カテゴリー名が不正です。"),
-  CATEGORY_CREATE_FAILED: e("E4503", "カテゴリーの作成に失敗しました。"),
+  CATEGORY_FORBIDDEN: e(
+    "E4501",
+    "パッド（カテゴリー）の操作権限がありません。",
+  ),
+  CATEGORY_NAME_INVALID: e("E4502", "パッド名が不正です。"),
+  CATEGORY_CREATE_FAILED: e("E4503", "パッドの作成に失敗しました。"),
+  CATEGORY_NOT_FOUND: e("E4504", "パッドが見つかりません。"),
+  CATEGORY_RENAME_FAILED: e("E4505", "パッド名の変更に失敗しました。"),
 
   // --- Playback E50xx ---
   PLAY_COOLDOWN: e("E5001", "クールダウン中です。連打を控えてください。"),

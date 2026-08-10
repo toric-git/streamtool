@@ -104,11 +104,13 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-md border-slate-200/80 bg-white/90 shadow-lg backdrop-blur">
       <CardHeader>
-        <CardTitle className="text-xl">{APP_NAME}</CardTitle>
+        <CardTitle className="text-xl">
+          {mode === "login" ? "ログイン" : "新規登録"}
+        </CardTitle>
         <CardDescription>
           {mode === "login"
-            ? "メールまたは Google でログイン（Googleは表示名の入力が必要です）"
-            : "表示名を決めてアカウントを作成"}
+            ? "メールまたは Google でログインできます"
+            : "はじめての方はこちら。表示名を決めてアカウントを作成します"}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

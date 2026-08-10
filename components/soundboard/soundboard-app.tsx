@@ -1,15 +1,15 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
-import { updateSoundVolume } from "@/app/actions/sounds";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { deleteSound, updateSoundVolume } from "@/app/actions/sounds";
 import { randomUUID } from "@/lib/crypto/random-uuid";
 import { createClient } from "@/lib/supabase/client";
+import { useLiveBoardCatalog } from "@/hooks/use-live-board-catalog";
 import { useRealtimeRoom } from "@/hooks/use-realtime-room";
 import { useFavoriteSounds } from "@/hooks/use-favorite-sounds";
 import { useSignedMediaUrls } from "@/hooks/use-signed-media-urls";
 import { useSoundCooldown } from "@/hooks/use-sound-cooldown";
 import { AudioEnableGate } from "@/components/soundboard/audio-enable-gate";
-import { BoardSoundsPanel } from "@/components/soundboard/board-sounds-panel";
 import {
   CategoryChips,
   CategoryRail,
@@ -40,6 +40,7 @@ type Category = { id: string; name: string };
 export function SoundboardApp({
   roomId,
   roomName,
+  roomDescription,
   roomCode,
   masterVolume,
   maxSimultaneous,
@@ -57,6 +58,7 @@ export function SoundboardApp({
 }: {
   roomId: string;
   roomName: string;
+  roomDescription: string | null;
   roomCode: string;
   masterVolume: number;
   maxSimultaneous: number;
@@ -75,15 +77,20 @@ export function SoundboardApp({
   const [deviceVolume, setDeviceVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [soundVolumes, setSoundVolumes] = useState<Record<string, number>>({});
-  const [categoryId, setCategoryId] = useState<CategoryFilter>("all");
+  const [categoryId, setCategoryId] = useState<CategoryFilter>(
+    () => categories[0]?.id ?? "favorites",
+  );
   const [actionError, setActionError] = useState<AppError | null>(null);
   const [, startVolumeTransition] = useTransition();
   const { coolingIds, cooldownProgress, startCooldown } = useSoundCooldown();
   const { favoriteIds, toggleFavorite, isFavorite } = useFavoriteSounds(roomId);
+  const { sounds: liveSounds, categories: liveCategories } =
+    useLiveBoardCatalog(roomId, sounds, categories);
+
   const imageUrls = useSignedMediaUrls({
     roomId,
     kind: "image",
-    paths: sounds.map((s) => s.image_path),
+    paths: liveSounds.map((s) => s.image_path),
     enabled: true,
   });
 
@@ -100,17 +107,22 @@ export function SoundboardApp({
     uploadEnabled,
   });
 
+  useEffect(() => {
+    if (categoryId === "favorites") return;
+    if (liveCategories.some((c) => c.id === categoryId)) return;
+    setCategoryId(liveCategories[0]?.id ?? "favorites");
+  }, [liveCategories, categoryId]);
+
   const soundsWithVolume = useMemo(
     () =>
-      sounds.map((s) => ({
+      liveSounds.map((s) => ({
         ...s,
         volume: soundVolumes[s.id] ?? Number(s.volume),
       })),
-    [sounds, soundVolumes],
+    [liveSounds, soundVolumes],
   );
 
   const filtered = useMemo(() => {
-    if (categoryId === "all") return soundsWithVolume;
     if (categoryId === "favorites") {
       return soundsWithVolume.filter((s) => favoriteIds.includes(s.id));
     }
@@ -119,9 +131,9 @@ export function SoundboardApp({
 
   const soundNames = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const s of sounds) map[s.id] = s.name;
+    for (const s of liveSounds) map[s.id] = s.name;
     return map;
-  }, [sounds]);
+  }, [liveSounds]);
 
   const memberNames = useMemo(() => {
     const map: Record<string, string> = {};
@@ -169,6 +181,21 @@ export function SoundboardApp({
     },
     [],
   );
+
+  const handleDeleteSound = useCallback(async (soundId: string) => {
+    setActionError(null);
+    const result = await deleteSound(soundId);
+    if (!result.ok) {
+      setActionError({ code: result.code, message: result.error });
+      return false;
+    }
+    setSoundVolumes((prev) => {
+      const next = { ...prev };
+      delete next[soundId];
+      return next;
+    });
+    return true;
+  }, []);
 
   const emitPlay = useCallback(
     async (sound: BoardSound) => {
@@ -244,9 +271,11 @@ export function SoundboardApp({
             <h1 className="font-display truncate text-xl font-semibold tracking-tight">
               {roomName}
             </h1>
-            <p className="text-xs font-bold text-muted-foreground">
-              コード {roomCode} · 招待・メンバー・サウンドはこの画面で完結
-            </p>
+            {roomDescription?.trim() ? (
+              <p className="line-clamp-2 text-sm font-semibold text-muted-foreground">
+                {roomDescription.trim()}
+              </p>
+            ) : null}
           </div>
           <ConnectionStatusBadge status={connectionStatus} />
           {canManage && <StopAllButton onStopAll={emitStopAll} />}
@@ -282,24 +311,37 @@ export function SoundboardApp({
 
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[160px_minmax(0,1fr)_320px]">
         <CategoryRail
-          categories={categories}
+          roomId={roomId}
+          categories={liveCategories}
           categoryId={categoryId}
+          canManage={canManage}
           onChange={setCategoryId}
+          onError={setActionError}
         />
 
         <section className="space-y-4">
           <CategoryChips
-            categories={categories}
+            roomId={roomId}
+            categories={liveCategories}
             categoryId={categoryId}
+            canManage={canManage}
             onChange={setCategoryId}
+            onError={setActionError}
           />
           <SoundGrid
+            roomId={roomId}
+            categories={liveCategories}
             sounds={filtered}
-            canManageSounds={canManage}
+            canUpload={canUpload}
+            canDelete={canManage}
+            showAddSlots={categoryId !== "favorites"}
+            defaultCategoryId={
+              categoryId !== "favorites" ? categoryId : ""
+            }
             emptyMessage={
               categoryId === "favorites"
                 ? "お気に入りはまだありません。パッド右上の☆で追加できます。"
-                : "まだサウンドがありません。下の「サウンドの追加・削除」から初期4音やアップロードで追加してください。"
+                : "このパッドにはまだサウンドがありません。空欄の＋から追加できます。"
             }
             imageUrls={imageUrls}
             playingIds={playingIds}
@@ -309,18 +351,7 @@ export function SoundboardApp({
             isFavorite={isFavorite}
             onPlay={(sound) => void emitPlay(sound)}
             onToggleFavorite={toggleFavorite}
-            onVolumeChange={canManage ? handleVolumeChange : undefined}
-            onVolumeCommit={canManage ? handleVolumeCommit : undefined}
-          />
-
-          <BoardSoundsPanel
-            roomId={roomId}
-            sounds={soundsWithVolume}
-            categories={categories}
-            canUpload={canUpload}
-            canDelete={canManage}
-            canEditVolume={canManage}
-            canInstallDefaults={canManage}
+            onDelete={canManage ? handleDeleteSound : undefined}
             onVolumeChange={canManage ? handleVolumeChange : undefined}
             onVolumeCommit={canManage ? handleVolumeCommit : undefined}
           />

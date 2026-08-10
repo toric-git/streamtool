@@ -18,12 +18,14 @@ export function SoundUploadForm({
   categories,
   canUpload,
   compact = false,
+  defaultCategoryId = "",
   onSuccess,
 }: {
   roomId: string;
   categories: Category[];
   canUpload: boolean;
   compact?: boolean;
+  defaultCategoryId?: string;
   onSuccess?: () => void;
 }) {
   const [error, setError] = useState<AppError | null>(null);
@@ -130,7 +132,7 @@ export function SoundUploadForm({
             audioPath: audioUpload.path,
             imagePath,
             categoryId: String(formData.get("categoryId") || "") || null,
-            buttonColor: String(formData.get("buttonColor") || "#334155"),
+            buttonColor: String(formData.get("buttonColor") || "#ff6b9d"),
             textColor: String(formData.get("textColor") || "#ffffff"),
             volume: Number(formData.get("volume") || 1),
             cooldownMs: Number(formData.get("cooldownMs") || 1000),
@@ -145,7 +147,7 @@ export function SoundUploadForm({
           setSuccess(
             compact
               ? "追加しました。パッドに反映されます。"
-              : "サウンドを登録しました。承認が必要な場合は、承認されるまでボードに表示されません。",
+              : "サウンドを登録しました。ボードにすぐ反映されます。",
           );
           form.reset();
           setDurationMs(null);
@@ -256,7 +258,7 @@ export function SoundUploadForm({
               id="categoryId"
               name="categoryId"
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              defaultValue=""
+              defaultValue={defaultCategoryId}
             >
               <option value="">なし</option>
               {categories.map((c) => (
@@ -286,7 +288,7 @@ export function SoundUploadForm({
             id="board-categoryId"
             name="categoryId"
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            defaultValue=""
+            defaultValue={defaultCategoryId}
           >
             <option value="">なし</option>
             {categories.map((c) => (

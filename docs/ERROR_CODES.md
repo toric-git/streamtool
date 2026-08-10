@@ -26,10 +26,10 @@
 | 番号 | キー | メッセージ | 想定シーン |
 |------|------|------------|------------|
 | E2105 | `ROOM_CREATE_SEED_FAILED` | 部屋は作成されたが初期サウンド設置に失敗 | 部屋作成直後の自動シード失敗（ログ／サポート用。部屋自体は使える） |
-| E4025 | `SOUND_SEED_FORBIDDEN` | 初期サウンド追加はオーナー／管理者のみ | サウンド管理の「初期4音を追加」を権限外ユーザーが実行 |
-| E4026 | `SOUND_SEED_FAILED` | 初期サウンド追加に失敗 | ストレージ／DB障害などで1件も追加できなかった |
-| E4027 | `SOUND_SEED_NONE` | 同名のため追加できる初期音がない | 正解・ハズレ・ドドン・ファンファーレが既に揃っている |
-| E4028 | `SOUND_SEED_ASSET_MISSING` | 初期音ファイルがサーバーにない | `lib/sounds/default-assets` 欠損・デプロイ漏れ（ログ） |
+| E4025 | `SOUND_SEED_FORBIDDEN` | 初期サウンド追加はオーナー／管理者のみ | （手動シード廃止。互換のためコードは残置） |
+| E4026 | `SOUND_SEED_FAILED` | 初期サウンド追加に失敗 | 部屋作成時シードで1件も追加できなかった（ログ） |
+| E4027 | `SOUND_SEED_NONE` | 同名のため追加できる初期音がない | （手動シード廃止。互換のためコードは残置） |
+| E4028 | `SOUND_SEED_ASSET_MISSING` | 初期音ファイルがサーバーにない | `lib/sounds/default-assets` 欠損・トレース漏れ（ログ） |
 | E4029 | `SOUND_SEED_UPLOAD_FAILED` | 初期音の Storage アップロード失敗 | Supabase Storage 障害・権限（ログ） |
 | E4030 | `SOUND_SEED_INSERT_FAILED` | 初期音の DB 登録失敗 | RLS／制約違反など（ログ。アップロード済みファイルは削除試行） |
 | E4031 | `SOUND_SEED_PARTIAL` | 一部だけ追加できた | 4音のうち一部成功・一部失敗 |
@@ -148,8 +148,8 @@
 | E4008 | SOUND_DELETE_FORBIDDEN | 削除権限がありません。 |
 | E4009 | SOUND_DELETE_FAILED | 削除に失敗しました。… |
 | E4010 | SOUND_STORAGE_CLEANUP | DB削除成功・ファイル削除失敗 |
-| E4011 | SOUND_APPROVE_FAILED | 承認に失敗しました。… |
-| E4012 | SOUND_REJECT_FAILED | 却下に失敗しました。… |
+| E4011 | SOUND_APPROVE_FAILED | （廃止）承認 UI なし。アップロードは即時反映 |
+| E4012 | SOUND_REJECT_FAILED | （廃止）却下 UI なし。アップロードは即時反映 |
 | E4013 | SOUND_REORDER_FAILED | 並び替えに失敗しました。 |
 | E4014 | SOUND_FILE_REQUIRED | 音声ファイルを選択してください。 |
 | E4015 | SOUND_DURATION_READ | 再生時間を読み取れませんでした。… |
@@ -174,9 +174,11 @@
 
 | 番号 | キー | メッセージ |
 |------|------|------------|
-| E4501 | CATEGORY_FORBIDDEN | カテゴリー作成権限がありません。 |
-| E4502 | CATEGORY_NAME_INVALID | カテゴリー名が不正です。 |
-| E4503 | CATEGORY_CREATE_FAILED | カテゴリーの作成に失敗しました。 |
+| E4501 | CATEGORY_FORBIDDEN | パッド（カテゴリー）の操作権限がありません |
+| E4502 | CATEGORY_NAME_INVALID | パッド名が不正です |
+| E4503 | CATEGORY_CREATE_FAILED | パッドの作成に失敗しました |
+| E4504 | CATEGORY_NOT_FOUND | パッドが見つかりません |
+| E4505 | CATEGORY_RENAME_FAILED | パッド名の変更に失敗しました |
 
 ### E50xx 再生 / 音声
 

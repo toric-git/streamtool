@@ -41,7 +41,6 @@ export async function createRoom(
     guestEnabled: formData.get("guestEnabled") === "on",
     guestCanPlay: formData.get("guestCanPlay") === "on",
     uploadEnabled: formData.get("uploadEnabled") === "on",
-    uploadRequiresApproval: formData.get("uploadRequiresApproval") !== "off",
   });
 
   if (!parsed.success) {
@@ -116,7 +115,8 @@ export async function createRoom(
         guest_enabled: parsed.data.guestEnabled,
         guest_can_play: parsed.data.guestCanPlay,
         upload_enabled: parsed.data.uploadEnabled,
-        upload_requires_approval: parsed.data.uploadRequiresApproval,
+        // Approval workflow removed from product UI; uploads go live immediately.
+        upload_requires_approval: false,
       })
       .select("id")
       .single();
@@ -173,23 +173,18 @@ export async function createRoom(
       ownerId: user.id,
     });
     console.info("[rooms] default sounds", seeded);
-    if (seeded.seeded === 0 && seeded.failed > 0) {
+    if (seeded.seeded < 4 && seeded.failed > 0) {
       console.error(
         "[rooms]",
-        E.ROOM_CREATE_SEED_FAILED.code,
-        seeded,
-        { userId: user.id, roomId },
-      );
-    } else if (seeded.seeded > 0 && seeded.failed > 0) {
-      console.error(
-        "[rooms]",
-        E.SOUND_SEED_PARTIAL.code,
+        seeded.seeded === 0
+          ? E.ROOM_CREATE_SEED_FAILED.code
+          : E.SOUND_SEED_PARTIAL.code,
         seeded,
         { userId: user.id, roomId },
       );
     }
   } catch (err) {
-    // Room is usable without defaults; owner can add from サウンド管理.
+    // Room remains usable; owner can upload sounds manually.
     console.error("[rooms]", E.ROOM_CREATE_SEED_FAILED.code, err);
   }
 
@@ -217,7 +212,6 @@ export async function updateRoom(
     guestEnabled: formData.get("guestEnabled") === "on",
     guestCanPlay: formData.get("guestCanPlay") === "on",
     uploadEnabled: formData.get("uploadEnabled") === "on",
-    uploadRequiresApproval: formData.get("uploadRequiresApproval") === "on",
     masterVolume: Number(formData.get("masterVolume") ?? 1),
     obsVolume: Number(formData.get("obsVolume") ?? 1),
     defaultCooldownMs: Number(formData.get("defaultCooldownMs") ?? 1000),
@@ -241,7 +235,7 @@ export async function updateRoom(
     guest_enabled: parsed.data.guestEnabled,
     guest_can_play: parsed.data.guestCanPlay,
     upload_enabled: parsed.data.uploadEnabled,
-    upload_requires_approval: parsed.data.uploadRequiresApproval,
+    upload_requires_approval: false,
     master_volume: parsed.data.masterVolume,
     obs_volume: parsed.data.obsVolume,
     default_cooldown_ms: parsed.data.defaultCooldownMs,
