@@ -152,6 +152,9 @@ export function SoundboardApp({
     connectionStatus,
     audioUnlocked,
     unlockAudio,
+    playLocal,
+    stopLocal,
+    stopAllLocal,
     preloadAll,
     preloadState,
     playingIds,
@@ -246,31 +249,48 @@ export function SoundboardApp({
         }
       }
 
-      const supabase = createClient();
-      const { error } = await supabase.rpc("create_playback_event", {
-        p_room_id: roomId,
-        p_sound_id: sound.id,
-        p_action: "play",
-        p_volume: 1,
-        p_client_event_id: randomUUID(),
-      });
+      const clientEventId = randomUUID();
 
-      if (error) {
-        const mapped = mapPlaybackError(error.message);
-        console.error("[board]", mapped.code, error.code, error.message);
-        setActionError(mapped);
+      // Play on this device immediately; Realtime echo is deduped by clientEventId.
+      const played = await playLocal({
+        soundId: sound.id,
+        audioPath: sound.audio_path,
+        soundVolume: Number(sound.volume),
+        eventVolume: 1,
+        clientEventId,
+        loop: isLoop,
+      });
+      if (!played) {
+        setActionError(E.AUDIO_PLAYBACK_FAILED);
         return;
       }
 
       if (!isLoop) {
         startCooldown(sound.id, sound.cooldown_ms);
       }
+
+      const supabase = createClient();
+      void supabase
+        .rpc("create_playback_event", {
+          p_room_id: roomId,
+          p_sound_id: sound.id,
+          p_action: "play",
+          p_volume: 1,
+          p_client_event_id: clientEventId,
+        })
+        .then(({ error }) => {
+          if (!error) return;
+          const mapped = mapPlaybackError(error.message);
+          console.error("[board]", mapped.code, error.code, error.message);
+          setActionError(mapped);
+        });
     },
     [
       audioUnlocked,
       canPlay,
       coolingIds,
       lastError,
+      playLocal,
       roomId,
       startCooldown,
       unlockAudio,
@@ -280,29 +300,36 @@ export function SoundboardApp({
   const emitStop = useCallback(
     async (sound: BoardSound) => {
       if ((sound.playback_mode ?? "one_shot") !== "toggle_loop") return;
+      const clientEventId = randomUUID();
+      stopLocal(sound.id, clientEventId);
       const supabase = createClient();
-      const { error } = await supabase.rpc("create_playback_event", {
-        p_room_id: roomId,
-        p_sound_id: sound.id,
-        p_action: "stop",
-        p_volume: 1,
-        p_client_event_id: randomUUID(),
-      });
-      if (error) {
-        console.error("[board] stop rejected", error.code, error.message);
-      }
+      void supabase
+        .rpc("create_playback_event", {
+          p_room_id: roomId,
+          p_sound_id: sound.id,
+          p_action: "stop",
+          p_volume: 1,
+          p_client_event_id: clientEventId,
+        })
+        .then(({ error }) => {
+          if (error) {
+            console.error("[board] stop rejected", error.code, error.message);
+          }
+        });
     },
-    [roomId],
+    [roomId, stopLocal],
   );
 
   async function emitStopAll() {
+    const clientEventId = randomUUID();
+    stopAllLocal(clientEventId);
     const supabase = createClient();
     const { error } = await supabase.rpc("create_playback_event", {
       p_room_id: roomId,
       p_sound_id: null,
       p_action: "stop_all",
       p_volume: 1,
-      p_client_event_id: randomUUID(),
+      p_client_event_id: clientEventId,
     });
     if (error) {
       console.error("[board] stop_all rejected", error.code);
@@ -406,6 +433,7 @@ export function SoundboardApp({
                 ? "お気に入りはまだありません。パッド右上の☆で追加できます。"
                 : "このパッドにはまだサウンドがありません。末尾の＋から追加できます。"
             }
+            existingSoundNames={liveSounds.map((s) => s.name)}
             imageUrls={imageUrls}
             playingIds={playingIds}
             coolingIds={coolingIds}

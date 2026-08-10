@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AudioEngine, type AudioEngineLike, type PlayRequest } from "@/lib/audio/audio-engine";
 import {
+  isEventTooOld,
   markClientEventSeen,
-  shouldPlayClientEvent,
 } from "@/lib/audio/playback-math";
 import { REALTIME_LIMITS } from "@/lib/app-config";
 import { E, type AppError } from "@/lib/errors/catalog";
@@ -56,6 +56,7 @@ export function useRealtimeRoom({
   >("idle");
 
   const seenIdsRef = useRef(new Set<string>());
+  const historySeenRef = useRef(new Set<string>());
   const engineRef = useRef<AudioEngineLike | null>(null);
   const soundsRef = useRef(sounds);
   const memberNamesRef = useRef(memberNames);
@@ -151,19 +152,34 @@ export function useRealtimeRoom({
           };
 
           if (
-            !shouldPlayClientEvent({
-              clientEventId: event.clientEventId,
-              seenIds: seenIdsRef.current,
+            isEventTooOld({
               createdAt: event.createdAt,
               maxAgeMs: REALTIME_LIMITS.maxEventAgeMs,
             })
           ) {
             return;
           }
-          markClientEventSeen(seenIdsRef.current, event.clientEventId);
 
-          onEvent?.(event);
-          setHistory((prev) => [event, ...prev].slice(0, REALTIME_LIMITS.historyLimit));
+          // Optimistic local play marks clientEventId first so Realtime does not
+          // double-play; history still records the server event once.
+          const alreadyPlayedLocally = seenIdsRef.current.has(
+            event.clientEventId,
+          );
+          if (!alreadyPlayedLocally) {
+            markClientEventSeen(seenIdsRef.current, event.clientEventId);
+          }
+
+          if (!historySeenRef.current.has(event.clientEventId)) {
+            markClientEventSeen(historySeenRef.current, event.clientEventId);
+            onEvent?.(event);
+            setHistory((prev) =>
+              [event, ...prev].slice(0, REALTIME_LIMITS.historyLimit),
+            );
+          }
+
+          if (alreadyPlayedLocally) {
+            return;
+          }
 
           // Audio playback needs a prior user gesture; history still updates.
           if (!engineRef.current?.isUnlocked()) {
@@ -232,6 +248,43 @@ export function useRealtimeRoom({
     return ok;
   }
 
+  /** Play immediately on this device; mark id so Realtime echo does not double-play. */
+  async function playLocal(request: PlayRequest): Promise<boolean> {
+    const engine = engineRef.current;
+    if (!engine || !engine.isUnlocked()) {
+      setLastError(E.AUDIO_ENGINE_NOT_READY);
+      return false;
+    }
+    markClientEventSeen(seenIdsRef.current, request.clientEventId);
+    try {
+      await engine.play(request);
+      setPlayingIds(engine.getPlayingSoundIds());
+      setLastError(null);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "error";
+      console.error("[audio]", E.AUDIO_PLAYBACK_FAILED.code, message);
+      setLastError(
+        message === "audio_locked" ? E.AUDIO_LOCKED : E.AUDIO_PLAYBACK_FAILED,
+      );
+      return false;
+    }
+  }
+
+  function stopLocal(soundId: string, clientEventId: string) {
+    markClientEventSeen(seenIdsRef.current, clientEventId);
+    engineRef.current?.stop(soundId);
+    setPlayingIds(engineRef.current?.getPlayingSoundIds() ?? []);
+  }
+
+  function stopAllLocal(clientEventId?: string) {
+    if (clientEventId) {
+      markClientEventSeen(seenIdsRef.current, clientEventId);
+    }
+    engineRef.current?.stopAll();
+    setPlayingIds([]);
+  }
+
   async function preloadAll(): Promise<boolean> {
     const engine = engineRef.current;
     if (!engine || !audioUnlocked) {
@@ -244,7 +297,9 @@ export function useRealtimeRoom({
       soundsRef.current.map((s) => engine.preload(s.id, s.audio_path)),
     );
     const failed = results.filter((r) => r.status === "rejected").length;
-    setPreloadState(failed === results.length && results.length > 0 ? "idle" : "done");
+    setPreloadState(
+      failed === results.length && results.length > 0 ? "idle" : "done",
+    );
     if (failed > 0 && failed === results.length) {
       setLastError(E.AUDIO_PLAYBACK_FAILED);
       return false;
@@ -256,11 +311,13 @@ export function useRealtimeRoom({
     connectionStatus,
     audioUnlocked,
     unlockAudio,
+    playLocal,
+    stopLocal,
+    stopAllLocal,
     preloadAll,
     preloadState,
     playingIds,
     lastError,
     history,
-    stopAllLocal: () => engineRef.current?.stopAll(),
   };
 }

@@ -3,6 +3,7 @@ import { existsSync } from "fs";
 import path from "path";
 import {
   DEFAULT_STREAM_SOUNDS,
+  PRESET_LIBRARY_SOUNDS,
   estimateMp3DurationMs,
 } from "@/lib/sounds/default-stream-sounds";
 
@@ -43,5 +44,21 @@ describe("DEFAULT_STREAM_SOUNDS", () => {
     expect(estimateMp3DurationMs(0)).toBe(200);
     expect(estimateMp3DurationMs(16_000)).toBeGreaterThan(200);
     expect(estimateMp3DurationMs(10_000_000)).toBe(30_000);
+  });
+});
+
+describe("PRESET_LIBRARY_SOUNDS", () => {
+  it("covers unique presets with on-disk assets", () => {
+    expect(PRESET_LIBRARY_SOUNDS.length).toBeGreaterThanOrEqual(4);
+    const names = PRESET_LIBRARY_SOUNDS.map((s) => s.name);
+    const files = PRESET_LIBRARY_SOUNDS.map((s) => s.file);
+    expect(new Set(names).size).toBe(names.length);
+    expect(new Set(files).size).toBe(files.length);
+
+    const dir = path.join(process.cwd(), "lib", "sounds", "default-assets");
+    for (const sound of PRESET_LIBRARY_SOUNDS) {
+      expect(existsSync(path.join(dir, sound.file))).toBe(true);
+      expect(sound.name.length).toBeLessThanOrEqual(40);
+    }
   });
 });

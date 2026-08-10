@@ -11,6 +11,8 @@ import {
 import { E, withMessage } from "@/lib/errors/catalog";
 import { verifyStoredAudio, verifyStoredImage } from "@/lib/media/verify-stored";
 import { isOwnerOrAdmin } from "@/lib/permissions/room-permissions";
+import { findPresetByFile } from "@/lib/sounds/default-stream-sounds";
+import { insertPresetSound } from "@/lib/sounds/seed-default-sounds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getSessionUser,
@@ -473,4 +475,89 @@ export async function reorderSoundsAction(
   }
   revalidateSounds(roomId);
   return actionOk();
+}
+
+export async function addPresetSound(
+  roomId: string,
+  file: string,
+  categoryId?: string | null,
+): Promise<ActionResult<{ soundId: string }>> {
+  const preset = findPresetByFile(file);
+  if (!preset) {
+    return actionFail(
+      withMessage(E.VALIDATION, "選べるプリセットサウンドではありません。"),
+    );
+  }
+
+  const actor = await requireRoomActor(roomId);
+  if (!actor.ok) return actionFailFrom(actor);
+
+  const { data: room } = await actor.supabase
+    .from("rooms")
+    .select("upload_enabled")
+    .eq("id", roomId)
+    .maybeSingle();
+
+  if (!room) return actionFail(E.ROOM_NOT_FOUND);
+
+  const adminRole = isOwnerOrAdmin(actor.membership.role);
+  if (!adminRole && (!room.upload_enabled || !actor.membership.can_upload)) {
+    return actionFail(E.SOUND_UPLOAD_DISABLED);
+  }
+
+  if (categoryId) {
+    const { data: category } = await actor.supabase
+      .from("sound_categories")
+      .select("id")
+      .eq("id", categoryId)
+      .eq("room_id", roomId)
+      .maybeSingle();
+    if (!category) {
+      return actionFail(
+        withMessage(E.VALIDATION, "カテゴリが見つかりません。"),
+      );
+    }
+  }
+
+  const { data: existing } = await actor.supabase
+    .from("sounds")
+    .select("id")
+    .eq("room_id", roomId)
+    .eq("name", preset.name)
+    .maybeSingle();
+
+  if (existing) {
+    return actionFail(E.SOUND_SEED_NONE);
+  }
+
+  const { data: maxSort } = await actor.supabase
+    .from("sounds")
+    .select("sort_order")
+    .eq("room_id", roomId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const admin = createAdminClient();
+  const inserted = await insertPresetSound({
+    admin,
+    roomId,
+    ownerId: actor.user.id,
+    preset,
+    categoryId: categoryId ?? null,
+    sortOrder: (maxSort?.sort_order ?? -1) + 1,
+  });
+
+  if (!inserted.ok) {
+    if (inserted.reason === "missing" || inserted.reason === "empty") {
+      return actionFail(E.SOUND_SEED_ASSET_MISSING);
+    }
+    if (inserted.reason === "upload") {
+      return actionFail(E.SOUND_SEED_UPLOAD_FAILED);
+    }
+    return actionFail(E.SOUND_SEED_INSERT_FAILED);
+  }
+
+  revalidateSounds(roomId);
+  return actionOk({ soundId: inserted.soundId });
 }

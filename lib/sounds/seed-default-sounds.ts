@@ -7,6 +7,7 @@ import {
   DEFAULT_STREAM_CATEGORY,
   DEFAULT_STREAM_SOUNDS,
   estimateMp3DurationMs,
+  type DefaultStreamSound,
 } from "@/lib/sounds/default-stream-sounds";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
@@ -25,6 +26,100 @@ export type SeedDefaultSoundsResult = {
   failed: number;
   categoryId: string | null;
 };
+
+export type InsertPresetResult =
+  | { ok: true; soundId: string; audioPath: string }
+  | {
+      ok: false;
+      reason: "missing" | "upload" | "insert" | "empty";
+      message?: string;
+    };
+
+/**
+ * Upload one preset MP3 from default-assets and insert an approved sound row.
+ */
+export async function insertPresetSound(options: {
+  admin: AdminClient;
+  roomId: string;
+  ownerId: string;
+  preset: DefaultStreamSound;
+  categoryId: string | null;
+  sortOrder: number;
+}): Promise<InsertPresetResult> {
+  const { admin, roomId, ownerId, preset, categoryId, sortOrder } = options;
+
+  const localPath = path.join(ASSETS_DIR, preset.file);
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(localPath);
+  } catch (err) {
+    console.error(
+      "[sounds]",
+      E.SOUND_SEED_ASSET_MISSING.code,
+      preset.file,
+      err,
+    );
+    return { ok: false, reason: "missing" };
+  }
+
+  if (bytes.byteLength === 0) {
+    console.error("[sounds]", E.SOUND_SEED_ASSET_MISSING.code, preset.file);
+    return { ok: false, reason: "empty" };
+  }
+
+  const audioPath = `${roomId}/${ownerId}/${randomUUID()}.mp3`;
+  const { error: uploadError } = await admin.storage
+    .from(STORAGE_BUCKETS.audio)
+    .upload(audioPath, bytes, {
+      contentType: "audio/mpeg",
+      upsert: false,
+    });
+
+  if (uploadError) {
+    console.error(
+      "[sounds]",
+      E.SOUND_SEED_UPLOAD_FAILED.code,
+      preset.name,
+      uploadError.message,
+    );
+    return { ok: false, reason: "upload", message: uploadError.message };
+  }
+
+  const { data, error: insertError } = await admin
+    .from("sounds")
+    .insert({
+      room_id: roomId,
+      uploader_id: ownerId,
+      category_id: categoryId,
+      name: preset.name,
+      audio_path: audioPath,
+      image_path: null,
+      button_color: preset.buttonColor,
+      text_color: preset.textColor ?? "#ffffff",
+      volume: 1,
+      cooldown_ms: preset.cooldownMs ?? 1000,
+      duration_ms: estimateMp3DurationMs(bytes.byteLength),
+      sort_order: sortOrder,
+      approval_status: "approved",
+      is_active: true,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !data?.id) {
+    console.error(
+      "[sounds]",
+      E.SOUND_SEED_INSERT_FAILED.code,
+      preset.name,
+      insertError?.code,
+      insertError?.message,
+    );
+    await admin.storage.from(STORAGE_BUCKETS.audio).remove([audioPath]);
+    return { ok: false, reason: "insert", message: insertError?.message };
+  }
+
+  return { ok: true, soundId: data.id, audioPath };
+}
 
 /**
  * Upload curated stream SFX into room storage and insert approved sound rows.
@@ -97,72 +192,16 @@ export async function seedDefaultSounds(options: {
       continue;
     }
 
-    const localPath = path.join(ASSETS_DIR, item.file);
-    let bytes: Buffer;
-    try {
-      bytes = await readFile(localPath);
-    } catch (err) {
-      console.error(
-        "[sounds]",
-        E.SOUND_SEED_ASSET_MISSING.code,
-        item.file,
-        err,
-      );
-      failed += 1;
-      continue;
-    }
-
-    if (bytes.byteLength === 0) {
-      console.error("[sounds]", E.SOUND_SEED_ASSET_MISSING.code, item.file);
-      failed += 1;
-      continue;
-    }
-
-    const audioPath = `${roomId}/${ownerId}/${randomUUID()}.mp3`;
-    const { error: uploadError } = await admin.storage
-      .from(STORAGE_BUCKETS.audio)
-      .upload(audioPath, bytes, {
-        contentType: "audio/mpeg",
-        upsert: false,
-      });
-
-    if (uploadError) {
-      console.error(
-        "[sounds]",
-        E.SOUND_SEED_UPLOAD_FAILED.code,
-        item.name,
-        uploadError.message,
-      );
-      failed += 1;
-      continue;
-    }
-
-    const { error: insertError } = await admin.from("sounds").insert({
-      room_id: roomId,
-      uploader_id: ownerId,
-      category_id: categoryId,
-      name: item.name,
-      audio_path: audioPath,
-      image_path: null,
-      button_color: item.buttonColor,
-      text_color: item.textColor ?? "#ffffff",
-      volume: 1,
-      cooldown_ms: item.cooldownMs ?? 1000,
-      duration_ms: estimateMp3DurationMs(bytes.byteLength),
-      sort_order: sortOrder,
-      approval_status: "approved",
-      is_active: true,
+    const result = await insertPresetSound({
+      admin,
+      roomId,
+      ownerId,
+      preset: item,
+      categoryId,
+      sortOrder,
     });
 
-    if (insertError) {
-      console.error(
-        "[sounds]",
-        E.SOUND_SEED_INSERT_FAILED.code,
-        item.name,
-        insertError.code,
-        insertError.message,
-      );
-      await admin.storage.from(STORAGE_BUCKETS.audio).remove([audioPath]);
+    if (!result.ok) {
       failed += 1;
       continue;
     }
