@@ -22,6 +22,7 @@ import {
   volumeSchema,
 } from "@/lib/validation/schemas";
 import { z } from "zod";
+import type { ApprovalStatus } from "@/types/database";
 
 const createSoundSchema = z.object({
   roomId: z.string().uuid(),
@@ -34,6 +35,17 @@ const createSoundSchema = z.object({
   volume: volumeSchema.default(1),
   cooldownMs: z.number().int().min(0).max(60_000).default(1000),
   durationMs: z.number().int().positive().max(30_000),
+});
+
+const updateSoundMetaSchema = z.object({
+  name: soundNameSchema,
+  buttonColor: hexColorSchema,
+  textColor: hexColorSchema,
+  volume: volumeSchema,
+  cooldownMs: z.number().int().min(0).max(60_000),
+  categoryId: z.string().uuid().nullable().optional(),
+  imagePath: z.string().nullable().optional(),
+  playbackMode: z.enum(["one_shot", "toggle_loop"]).default("one_shot"),
 });
 
 function revalidateSounds(roomId: string) {
@@ -59,7 +71,7 @@ export async function createSound(
 
   const { data: room } = await actor.supabase
     .from("rooms")
-    .select("upload_enabled, default_cooldown_ms")
+    .select("upload_enabled, upload_requires_approval, default_cooldown_ms")
     .eq("id", parsed.data.roomId)
     .maybeSingle();
 
@@ -88,6 +100,9 @@ export async function createSound(
     if (!imageVerify.ok) return actionFail(imageVerify.error);
   }
 
+  const approval: ApprovalStatus =
+    adminRole || !room.upload_requires_approval ? "approved" : "pending";
+
   const { data: maxSort } = await actor.supabase
     .from("sounds")
     .select("sort_order")
@@ -111,8 +126,8 @@ export async function createSound(
       cooldown_ms: parsed.data.cooldownMs || room.default_cooldown_ms,
       duration_ms: audioVerify.durationMs,
       sort_order: (maxSort?.sort_order ?? -1) + 1,
-      approval_status: "approved",
-      is_active: true,
+      approval_status: approval,
+      is_active: approval === "approved",
     })
     .select("id")
     .single();
@@ -181,13 +196,16 @@ export async function updateSoundVolume(
   return actionOk();
 }
 
-export async function deleteSound(soundId: string): Promise<ActionResult> {
+export async function updateSoundMeta(
+  soundId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const { supabase, user } = await getSessionUser();
   if (!user) return actionFail(E.AUTH_REQUIRED);
 
   const { data: sound } = await supabase
     .from("sounds")
-    .select("id, room_id, audio_path, image_path")
+    .select("id, room_id, uploader_id, approval_status")
     .eq("id", soundId)
     .maybeSingle();
 
@@ -196,7 +214,86 @@ export async function deleteSound(soundId: string): Promise<ActionResult> {
   const actor = await requireRoomActor(sound.room_id);
   if (!actor.ok) return actionFailFrom(actor);
 
-  if (!isOwnerOrAdmin(actor.membership.role)) {
+  const adminRole = isOwnerOrAdmin(actor.membership.role);
+  if (
+    !adminRole &&
+    !(sound.uploader_id === user.id && sound.approval_status === "pending")
+  ) {
+    return actionFail(E.SOUND_EDIT_FORBIDDEN);
+  }
+
+  const parsed = updateSoundMetaSchema.safeParse({
+    name: formData.get("name"),
+    buttonColor: formData.get("buttonColor"),
+    textColor: formData.get("textColor"),
+    volume: Number(formData.get("volume") ?? 1),
+    cooldownMs: Number(formData.get("cooldownMs") ?? 1000),
+    categoryId: formData.get("categoryId") || null,
+    imagePath: formData.get("imagePath") || null,
+    playbackMode: formData.get("playbackMode") || "one_shot",
+  });
+
+  if (!parsed.success) {
+    return actionFail(
+      withMessage(
+        E.VALIDATION,
+        parsed.error.issues[0]?.message ?? E.VALIDATION.message,
+      ),
+    );
+  }
+
+  const patch = {
+    name: parsed.data.name,
+    button_color: parsed.data.buttonColor,
+    text_color: parsed.data.textColor,
+    volume: parsed.data.volume,
+    cooldown_ms: parsed.data.cooldownMs,
+    category_id: parsed.data.categoryId ?? null,
+    playback_mode: parsed.data.playbackMode,
+    ...(formData.has("imagePath")
+      ? { image_path: parsed.data.imagePath }
+      : {}),
+  };
+
+  const { error } = await supabase
+    .from("sounds")
+    .update(patch)
+    .eq("id", soundId);
+
+  if (error) {
+    console.error(
+      "[sounds]",
+      E.SOUND_UPDATE_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.SOUND_UPDATE_FAILED);
+  }
+
+  revalidateSounds(sound.room_id);
+  return actionOk();
+}
+
+export async function deleteSound(soundId: string): Promise<ActionResult> {
+  const { supabase, user } = await getSessionUser();
+  if (!user) return actionFail(E.AUTH_REQUIRED);
+
+  const { data: sound } = await supabase
+    .from("sounds")
+    .select("id, room_id, uploader_id, approval_status, audio_path, image_path")
+    .eq("id", soundId)
+    .maybeSingle();
+
+  if (!sound) return actionFail(E.SOUND_NOT_FOUND);
+
+  const actor = await requireRoomActor(sound.room_id);
+  if (!actor.ok) return actionFailFrom(actor);
+
+  const adminRole = isOwnerOrAdmin(actor.membership.role);
+  if (
+    !adminRole &&
+    !(sound.uploader_id === user.id && sound.approval_status === "pending")
+  ) {
     return actionFail(E.SOUND_DELETE_FORBIDDEN);
   }
 
@@ -233,5 +330,97 @@ export async function deleteSound(soundId: string): Promise<ActionResult> {
   }
 
   revalidateSounds(sound.room_id);
+  return actionOk();
+}
+
+export async function approveSoundAction(soundId: string): Promise<ActionResult> {
+  const { supabase, user } = await getSessionUser();
+  if (!user) return actionFail(E.AUTH_REQUIRED);
+
+  const { data: sound } = await supabase
+    .from("sounds")
+    .select("id, room_id")
+    .eq("id", soundId)
+    .maybeSingle();
+
+  if (!sound) return actionFail(E.SOUND_NOT_FOUND);
+
+  const { error } = await supabase.rpc("approve_sound", { p_sound_id: soundId });
+  if (error) {
+    console.error(
+      "[sounds]",
+      E.SOUND_APPROVE_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.SOUND_APPROVE_FAILED);
+  }
+  revalidateSounds(sound.room_id);
+  return actionOk();
+}
+
+export async function rejectSoundAction(soundId: string): Promise<ActionResult> {
+  const { supabase, user } = await getSessionUser();
+  if (!user) return actionFail(E.AUTH_REQUIRED);
+
+  const { data: sound } = await supabase
+    .from("sounds")
+    .select("id, room_id, audio_path, image_path")
+    .eq("id", soundId)
+    .maybeSingle();
+
+  if (!sound) return actionFail(E.SOUND_NOT_FOUND);
+
+  const { error } = await supabase.rpc("reject_sound", { p_sound_id: soundId });
+  if (error) {
+    console.error(
+      "[sounds]",
+      E.SOUND_REJECT_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.SOUND_REJECT_FAILED);
+  }
+
+  try {
+    const admin = createAdminClient();
+    await admin.storage.from(STORAGE_BUCKETS.audio).remove([sound.audio_path]);
+    if (sound.image_path) {
+      await admin.storage.from(STORAGE_BUCKETS.images).remove([sound.image_path]);
+    }
+  } catch (err) {
+    console.error(
+      "[sounds]",
+      E.SOUND_STORAGE_CLEANUP.code,
+      err instanceof Error ? err.name : "unknown",
+    );
+  }
+
+  revalidatePath(`/rooms/${sound.room_id}/sounds`);
+  revalidateSounds(sound.room_id);
+  return actionOk();
+}
+
+export async function reorderSoundsAction(
+  roomId: string,
+  soundIds: string[],
+): Promise<ActionResult> {
+  const actor = await requireRoomActor(roomId);
+  if (!actor.ok) return actionFailFrom(actor);
+
+  const { error } = await actor.supabase.rpc("reorder_sounds", {
+    p_room_id: roomId,
+    p_sound_ids: soundIds,
+  });
+  if (error) {
+    console.error(
+      "[sounds]",
+      E.SOUND_REORDER_FAILED.code,
+      error.code,
+      error.message,
+    );
+    return actionFail(E.SOUND_REORDER_FAILED);
+  }
+  revalidateSounds(roomId);
   return actionOk();
 }

@@ -22,6 +22,7 @@ export function RoomSettingsForm({
     | "guest_enabled"
     | "guest_can_play"
     | "upload_enabled"
+    | "upload_requires_approval"
     | "master_volume"
     | "obs_volume"
     | "default_cooldown_ms"
@@ -122,6 +123,15 @@ export function RoomSettingsForm({
               className="size-4"
             />
             アップロードを許可
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="uploadRequiresApproval"
+              defaultChecked={room.upload_requires_approval}
+              className="size-4"
+            />
+            アップロード承認が必要
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">

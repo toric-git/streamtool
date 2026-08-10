@@ -40,6 +40,8 @@ export type PlayRequest = {
   soundVolume: number;
   eventVolume: number;
   clientEventId: string;
+  /** When true, clip loops until stop() (toggle_loop / hold-to-play). */
+  loop?: boolean;
 };
 
 export interface AudioEngineLike {
@@ -150,15 +152,22 @@ export class AudioEngine implements AudioEngineLike {
     });
 
     howl.volume(gain);
+    howl.loop(Boolean(request.loop));
     const instanceId = howl.play();
     const set = this.playing.get(request.soundId) ?? new Set<number>();
     set.add(instanceId);
     this.playing.set(request.soundId, set);
 
-    howl.once("end", () => {
-      set.delete(instanceId);
-      if (set.size === 0) this.playing.delete(request.soundId);
-    }, instanceId);
+    if (!request.loop) {
+      howl.once(
+        "end",
+        () => {
+          set.delete(instanceId);
+          if (set.size === 0) this.playing.delete(request.soundId);
+        },
+        instanceId,
+      );
+    }
   }
 
   stop(soundId: string): void {

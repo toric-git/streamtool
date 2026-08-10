@@ -10,6 +10,7 @@ type SoundRow = BoardSound & {
   approval_status?: string;
   is_active?: boolean;
   sort_order?: number;
+  playback_mode?: "one_shot" | "toggle_loop";
 };
 
 function isVisibleSound(row: SoundRow): boolean {
@@ -31,6 +32,9 @@ function toBoardSound(row: SoundRow): BoardSound {
     volume: Number(row.volume),
     cooldown_ms: row.cooldown_ms,
     category_id: row.category_id,
+    playback_mode:
+      row.playback_mode === "toggle_loop" ? "toggle_loop" : "one_shot",
+    sort_order: row.sort_order,
   };
 }
 

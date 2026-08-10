@@ -23,6 +23,8 @@ export type BoardSound = {
   volume: number;
   cooldown_ms: number;
   category_id: string | null;
+  playback_mode?: "one_shot" | "toggle_loop";
+  sort_order?: number;
 };
 
 const MIN_PAD_SLOTS = 9;
@@ -79,6 +81,7 @@ export function SoundGrid({
   canPlay,
   isFavorite,
   onPlay,
+  onStop,
   onToggleFavorite,
   onDelete,
   onVolumeChange,
@@ -99,6 +102,7 @@ export function SoundGrid({
   canPlay: boolean;
   isFavorite: (soundId: string) => boolean;
   onPlay: (sound: BoardSound) => void;
+  onStop?: (sound: BoardSound) => void;
   onToggleFavorite: (soundId: string) => void;
   onDelete?: (soundId: string) => Promise<boolean>;
   onVolumeChange?: (soundId: string, volume: number) => void;
@@ -115,18 +119,21 @@ export function SoundGrid({
   const allowAdd = canUpload && showAddSlots;
 
   useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
-      if (
+    const held = new Set<string>();
+
+    function typingTarget(target: HTMLElement | null) {
+      return Boolean(
         target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-      if (addOpen) return;
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT" ||
+            target.isContentEditable),
+      );
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (typingTarget(event.target as HTMLElement | null) || addOpen) return;
+      if (event.repeat) return;
 
       const hotkey = matchPadHotkey(event);
       if (!hotkey) return;
@@ -135,15 +142,39 @@ export function SoundGrid({
 
       const sound = sounds[index];
       if (!sound) return;
-      if (!canPlay || coolingIds[sound.id]) return;
+      const isLoop = (sound.playback_mode ?? "one_shot") === "toggle_loop";
+      if (!canPlay || (!isLoop && coolingIds[sound.id])) return;
 
       event.preventDefault();
+      if (isLoop) {
+        if (held.has(sound.id)) return;
+        held.add(sound.id);
+      }
       onPlay(sound);
     }
 
+    function onKeyUp(event: KeyboardEvent) {
+      if (typingTarget(event.target as HTMLElement | null) || addOpen) return;
+      const hotkey = matchPadHotkey(event);
+      if (!hotkey) return;
+      const index = indexForHotkey(hotkey);
+      const sound = sounds[index];
+      if (!sound || (sound.playback_mode ?? "one_shot") !== "toggle_loop") {
+        return;
+      }
+      if (!held.has(sound.id)) return;
+      held.delete(sound.id);
+      event.preventDefault();
+      onStop?.(sound);
+    }
+
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [sounds, canPlay, coolingIds, onPlay, addOpen]);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [sounds, canPlay, coolingIds, onPlay, onStop, addOpen]);
 
   useEffect(() => {
     if (!addOpen) return;
@@ -237,9 +268,11 @@ export function SoundGrid({
           }
 
           const cooling = Boolean(coolingIds[sound.id]);
+          const holdMode =
+            (sound.playback_mode ?? "one_shot") === "toggle_loop";
           const state = playingIds.includes(sound.id)
             ? "playing"
-            : cooling
+            : cooling && !holdMode
               ? "cooldown"
               : !canPlay
                 ? "disabled"
@@ -262,10 +295,16 @@ export function SoundGrid({
                   }
                   state={state}
                   cooldownProgress={
-                    cooling ? (cooldownProgress[sound.id] ?? 1) : 0
+                    cooling && !holdMode
+                      ? (cooldownProgress[sound.id] ?? 1)
+                      : 0
                   }
-                  disabled={!canPlay || cooling || busyDelete}
+                  disabled={
+                    !canPlay || busyDelete || (!holdMode && cooling)
+                  }
+                  holdMode={holdMode}
                   onPress={() => onPlay(sound)}
+                  onPressEnd={() => onStop?.(sound)}
                 />
                 {canDelete && onDelete && (
                   <button

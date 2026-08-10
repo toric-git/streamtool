@@ -37,7 +37,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
   const { data: room } = await supabase
     .from("rooms")
     .select(
-      "id, name, description, room_code, master_volume, guest_can_play, max_simultaneous_sounds, upload_enabled, guest_enabled, obs_volume, default_cooldown_ms, max_events_per_minute, max_members",
+      "id, name, description, room_code, master_volume, guest_can_play, max_simultaneous_sounds, upload_enabled, upload_requires_approval, guest_enabled, obs_volume, default_cooldown_ms, max_events_per_minute, max_members",
     )
     .eq("id", roomId)
     .maybeSingle();
@@ -55,7 +55,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
   const { data: sounds } = await supabase
     .from("sounds")
     .select(
-      "id, name, audio_path, button_color, text_color, image_path, volume, cooldown_ms, category_id, sort_order",
+      "id, name, audio_path, button_color, text_color, image_path, volume, cooldown_ms, category_id, sort_order, playback_mode",
     )
     .eq("room_id", roomId)
     .eq("approval_status", "approved")
@@ -69,6 +69,22 @@ export default async function RoomPage({ params, searchParams }: Props) {
     .order("sort_order", { ascending: true });
 
   const permissions = getPermissionsForRole(membership.role);
+
+  let pendingSounds: {
+    id: string;
+    name: string;
+    duration_ms: number;
+    approval_status: "pending" | "approved" | "rejected";
+  }[] = [];
+  if (permissions.canEditRoom) {
+    const { data } = await supabase
+      .from("sounds")
+      .select("id, name, duration_ms, approval_status")
+      .eq("room_id", roomId)
+      .eq("approval_status", "pending")
+      .order("created_at", { ascending: true });
+    pendingSounds = data ?? [];
+  }
 
   let settingsPayload: RoomSettingsPayload | null = null;
   if (permissions.canEditRoom) {
@@ -104,6 +120,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
         guest_enabled: room.guest_enabled,
         guest_can_play: room.guest_can_play,
         upload_enabled: room.upload_enabled,
+        upload_requires_approval: room.upload_requires_approval,
         master_volume: room.master_volume,
         obs_volume: room.obs_volume,
         default_cooldown_ms: room.default_cooldown_ms,
@@ -174,6 +191,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
         userId={user.id}
         displayName={membership.display_name}
         sounds={sounds ?? []}
+        pendingSounds={pendingSounds}
         categories={categories ?? []}
         members={(members ?? []).map((m) => ({
           user_id: m.user_id,

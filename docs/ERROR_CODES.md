@@ -148,8 +148,8 @@
 | E4008 | SOUND_DELETE_FORBIDDEN | 削除権限がありません。 |
 | E4009 | SOUND_DELETE_FAILED | 削除に失敗しました。… |
 | E4010 | SOUND_STORAGE_CLEANUP | DB削除成功・ファイル削除失敗 |
-| E4011 | SOUND_APPROVE_FAILED | （廃止）承認 UI なし。アップロードは即時反映 |
-| E4012 | SOUND_REJECT_FAILED | （廃止）却下 UI なし。アップロードは即時反映 |
+| E4011 | SOUND_APPROVE_FAILED | 承認に失敗しました。権限を確認してください。 |
+| E4012 | SOUND_REJECT_FAILED | 却下に失敗しました。権限を確認してください。 |
 | E4013 | SOUND_REORDER_FAILED | 並び替えに失敗しました。 |
 | E4014 | SOUND_FILE_REQUIRED | 音声ファイルを選択してください。 |
 | E4015 | SOUND_DURATION_READ | 再生時間を読み取れませんでした。… |

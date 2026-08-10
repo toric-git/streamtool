@@ -15,7 +15,7 @@ describe("SoundButton", () => {
       />,
     );
     expect(
-      screen.getByRole("button", { name: "拍手（キー 1）" }),
+      screen.getByRole("button", { name: /拍手（キー 1）/ }),
     ).toBeDisabled();
     expect(screen.getByText("クールダウン中")).toBeInTheDocument();
     expect(screen.getByText("KEY")).toBeInTheDocument();

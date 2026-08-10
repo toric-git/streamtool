@@ -17,6 +17,7 @@ type SoundMeta = {
   audio_path: string;
   volume: number;
   name: string;
+  playback_mode?: "one_shot" | "toggle_loop";
 };
 
 type Options = {
@@ -174,6 +175,7 @@ export function useRealtimeRoom({
                 soundVolume: Number(sound.volume),
                 eventVolume: event.volume,
                 clientEventId: event.clientEventId,
+                loop: sound.playback_mode === "toggle_loop",
               };
               await engineRef.current?.play(req);
               setPlayingIds(engineRef.current?.getPlayingSoundIds() ?? []);

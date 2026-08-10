@@ -209,19 +209,15 @@ export const E = {
     "E4010",
     "データベース上の削除は成功しましたが、ファイル削除に失敗しました。時間をおいて再試行するか管理者に連絡してください。",
   ),
-  // Kept for stable codes; approval UI/actions removed (uploads auto-approve).
   SOUND_APPROVE_FAILED: e(
     "E4011",
-    "承認機能は利用できません（アップロードは即時反映です）。",
+    "承認に失敗しました。権限を確認してください。",
   ),
   SOUND_REJECT_FAILED: e(
     "E4012",
-    "却下機能は利用できません（アップロードは即時反映です）。",
+    "却下に失敗しました。権限を確認してください。",
   ),
-  SOUND_REORDER_FAILED: e(
-    "E4013",
-    "並び替え機能は現在利用できません。",
-  ),
+  SOUND_REORDER_FAILED: e("E4013", "並び替えに失敗しました。"),
   SOUND_FILE_REQUIRED: e("E4014", "音声ファイルを選択してください。"),
   SOUND_DURATION_READ: e(
     "E4015",

@@ -21,6 +21,9 @@ type Props = {
   state?: SoundButtonState;
   cooldownProgress?: number; // 0..1 remaining ratio
   onPress?: () => void;
+  onPressEnd?: () => void;
+  /** Hold-to-play (toggle_loop): pointer down starts, up stops. */
+  holdMode?: boolean;
   disabled?: boolean;
 };
 
@@ -33,6 +36,8 @@ export function SoundButton({
   state = "idle",
   cooldownProgress = 0,
   onPress,
+  onPressEnd,
+  holdMode = false,
   disabled,
 }: Props) {
   const isDisabled =
@@ -41,15 +46,58 @@ export function SoundButton({
   return (
     <button
       type="button"
-      aria-label={hotkey ? `${name}（キー ${hotkey}）` : name}
+      aria-label={
+        holdMode
+          ? hotkey
+            ? `${name}（押し続け・キー ${hotkey}）`
+            : `${name}（押し続け）`
+          : hotkey
+            ? `${name}（キー ${hotkey}）`
+            : name
+      }
       aria-disabled={isDisabled}
       disabled={isDisabled}
-      onClick={onPress}
+      onClick={holdMode ? undefined : onPress}
+      onPointerDown={
+        holdMode
+          ? (e) => {
+              if (isDisabled) return;
+              e.preventDefault();
+              (e.currentTarget as HTMLButtonElement).setPointerCapture(
+                e.pointerId,
+              );
+              onPress?.();
+            }
+          : undefined
+      }
+      onPointerUp={
+        holdMode
+          ? (e) => {
+              e.preventDefault();
+              onPressEnd?.();
+            }
+          : undefined
+      }
+      onPointerCancel={
+        holdMode
+          ? () => {
+              onPressEnd?.();
+            }
+          : undefined
+      }
+      onLostPointerCapture={
+        holdMode
+          ? () => {
+              onPressEnd?.();
+            }
+          : undefined
+      }
       className={cn(
         "group relative flex aspect-square w-full min-h-[7.5rem] flex-col overflow-hidden rounded-[1.6rem] border-[3px] border-white/90 px-3 pb-3 pt-2.5 text-left shadow-[0_12px_28px_-14px_rgba(255,107,157,0.55)] transition duration-150",
         "hover:-translate-y-1 hover:brightness-[1.06] hover:shadow-[0_18px_32px_-12px_rgba(255,107,157,0.5)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "active:translate-y-0 active:scale-[0.97]",
+        "touch-none select-none",
         state === "playing" && "ring-4 ring-[var(--hub-sky)] ring-offset-2",
         state === "error" && "ring-2 ring-destructive",
         state === "pressed" && "scale-[0.97]",
@@ -95,7 +143,7 @@ export function SoundButton({
             {hotkey}
           </span>
           <span className="mt-0.5 text-[0.65rem] font-extrabold tracking-[0.18em] opacity-80">
-            KEY
+            {holdMode ? "HOLD" : "KEY"}
           </span>
         </span>
       ) : (

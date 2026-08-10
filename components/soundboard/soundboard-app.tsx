@@ -25,6 +25,11 @@ import {
 import { StopAllButton } from "@/components/soundboard/stop-all-button";
 import { VolumeSlider } from "@/components/soundboard/volume-slider";
 import type { ManageableMember } from "@/components/rooms/member-manage-list";
+import { BoardSoundManager } from "@/components/sounds/board-sound-manager";
+import {
+  PendingSoundList,
+  type PendingSound,
+} from "@/components/sounds/pending-sound-list";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { E, type AppError, withMessage } from "@/lib/errors/catalog";
 import { mapPlaybackError } from "@/lib/errors/messages";
@@ -53,6 +58,7 @@ export function SoundboardApp({
   userId,
   displayName,
   sounds,
+  pendingSounds = [],
   categories,
   members,
 }: {
@@ -71,6 +77,7 @@ export function SoundboardApp({
   userId: string;
   displayName: string;
   sounds: BoardSound[];
+  pendingSounds?: PendingSound[];
   categories: Category[];
   members: ManageableMember[];
 }) {
@@ -157,6 +164,7 @@ export function SoundboardApp({
       audio_path: s.audio_path,
       volume: Number(s.volume),
       name: s.name,
+      playback_mode: s.playback_mode ?? "one_shot",
     })),
     memberNames,
     roomVolume: masterVolume,
@@ -204,7 +212,8 @@ export function SoundboardApp({
         setActionError(E.PLAY_DENIED);
         return;
       }
-      if (coolingIds[sound.id]) {
+      const isLoop = (sound.playback_mode ?? "one_shot") === "toggle_loop";
+      if (!isLoop && coolingIds[sound.id]) {
         setActionError(
           withMessage(
             E.PLAY_COOLDOWN,
@@ -230,9 +239,29 @@ export function SoundboardApp({
         return;
       }
 
-      startCooldown(sound.id, sound.cooldown_ms);
+      if (!isLoop) {
+        startCooldown(sound.id, sound.cooldown_ms);
+      }
     },
     [canPlay, coolingIds, roomId, startCooldown],
+  );
+
+  const emitStop = useCallback(
+    async (sound: BoardSound) => {
+      if ((sound.playback_mode ?? "one_shot") !== "toggle_loop") return;
+      const supabase = createClient();
+      const { error } = await supabase.rpc("create_playback_event", {
+        p_room_id: roomId,
+        p_sound_id: sound.id,
+        p_action: "stop",
+        p_volume: 1,
+        p_client_event_id: randomUUID(),
+      });
+      if (error) {
+        console.error("[board] stop rejected", error.code, error.message);
+      }
+    },
+    [roomId],
   );
 
   async function emitStopAll() {
@@ -350,11 +379,45 @@ export function SoundboardApp({
             canPlay={canPlay}
             isFavorite={isFavorite}
             onPlay={(sound) => void emitPlay(sound)}
+            onStop={(sound) => void emitStop(sound)}
             onToggleFavorite={toggleFavorite}
             onDelete={canManage ? handleDeleteSound : undefined}
             onVolumeChange={canManage ? handleVolumeChange : undefined}
             onVolumeCommit={canManage ? handleVolumeCommit : undefined}
           />
+          {canManage && (
+            <>
+              <section className="space-y-3 rounded-2xl border border-border/80 bg-white/90 p-4">
+                <div>
+                  <h2 className="font-display text-lg font-semibold tracking-tight">
+                    承認待ち
+                  </h2>
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    メンバー投稿のサウンドを承認または却下します。
+                  </p>
+                </div>
+                <PendingSoundList
+                  sounds={pendingSounds}
+                  canModerate={canManage}
+                />
+              </section>
+              <BoardSoundManager
+                roomId={roomId}
+                initialSounds={soundsWithVolume.map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  button_color: s.button_color,
+                  text_color: s.text_color,
+                  volume: Number(s.volume),
+                  cooldown_ms: s.cooldown_ms,
+                  category_id: s.category_id,
+                  playback_mode: s.playback_mode ?? "one_shot",
+                  sort_order: s.sort_order,
+                }))}
+                categories={liveCategories}
+              />
+            </>
+          )}
         </section>
 
         <div className="space-y-4">

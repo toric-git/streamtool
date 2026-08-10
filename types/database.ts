@@ -161,6 +161,49 @@ export type Database = {
           },
         ];
       };
+      sound_favorites: {
+        Row: {
+          user_id: string;
+          room_id: string;
+          sound_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          room_id: string;
+          sound_id: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          room_id?: string;
+          sound_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "sound_favorites_room_id_fkey";
+            columns: ["room_id"];
+            isOneToOne: false;
+            referencedRelation: "rooms";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "sound_favorites_sound_id_fkey";
+            columns: ["sound_id"];
+            isOneToOne: false;
+            referencedRelation: "sounds";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "sound_favorites_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       sound_categories: {
         Row: {
           id: string;

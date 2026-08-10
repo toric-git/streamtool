@@ -16,6 +16,7 @@ export type RoomSettingsPayload = {
     | "guest_enabled"
     | "guest_can_play"
     | "upload_enabled"
+    | "upload_requires_approval"
     | "master_volume"
     | "obs_volume"
     | "default_cooldown_ms"

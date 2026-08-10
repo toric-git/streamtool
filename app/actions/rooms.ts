@@ -41,6 +41,7 @@ export async function createRoom(
     guestEnabled: formData.get("guestEnabled") === "on",
     guestCanPlay: formData.get("guestCanPlay") === "on",
     uploadEnabled: formData.get("uploadEnabled") === "on",
+    uploadRequiresApproval: formData.get("uploadRequiresApproval") === "on",
   });
 
   if (!parsed.success) {
@@ -115,8 +116,7 @@ export async function createRoom(
         guest_enabled: parsed.data.guestEnabled,
         guest_can_play: parsed.data.guestCanPlay,
         upload_enabled: parsed.data.uploadEnabled,
-        // Approval workflow removed from product UI; uploads go live immediately.
-        upload_requires_approval: false,
+        upload_requires_approval: parsed.data.uploadRequiresApproval,
       })
       .select("id")
       .single();
@@ -212,6 +212,7 @@ export async function updateRoom(
     guestEnabled: formData.get("guestEnabled") === "on",
     guestCanPlay: formData.get("guestCanPlay") === "on",
     uploadEnabled: formData.get("uploadEnabled") === "on",
+    uploadRequiresApproval: formData.get("uploadRequiresApproval") === "on",
     masterVolume: Number(formData.get("masterVolume") ?? 1),
     obsVolume: Number(formData.get("obsVolume") ?? 1),
     defaultCooldownMs: Number(formData.get("defaultCooldownMs") ?? 1000),
@@ -235,7 +236,7 @@ export async function updateRoom(
     guest_enabled: parsed.data.guestEnabled,
     guest_can_play: parsed.data.guestCanPlay,
     upload_enabled: parsed.data.uploadEnabled,
-    upload_requires_approval: false,
+    upload_requires_approval: parsed.data.uploadRequiresApproval,
     master_volume: parsed.data.masterVolume,
     obs_volume: parsed.data.obsVolume,
     default_cooldown_ms: parsed.data.defaultCooldownMs,

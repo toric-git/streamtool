@@ -48,10 +48,8 @@ cp .env.example .env.local
    - **Anonymous Sign-Ins 有効**（ゲスト / OBS に必須）
    - （任意）Google OAuth
    - Redirect URLs に `http://localhost:3000/auth/callback`
-3. SQL Editor で以下を順に実行
-   - `supabase/migrations/20260803220000_init.sql`
-   - `supabase/migrations/20260804120000_member_management.sql`
-   - `supabase/migrations/20260804130000_ownership_transfer.sql`
+3. SQL Editor で `supabase/migrations/` 配下をタイムスタンプ順にすべて実行
+   （または `npx supabase db push`）
 4. Storage に `room-audio` / `room-images`（migration が作成）
 5. Realtime publication に `playback_events` 等が含まれること確認
 
@@ -116,10 +114,10 @@ npm run test:e2e   # Playwright（要: npx playwright install）
 ## 現在の制約
 
 - MP3/OGG の厳密な再生時間はクライアント申告 + マジックバイト検証（WAV はサーバーで duration 推定）
-- `toggle_loop`、押し続け再生は未対応（`one_shot` のみ）
-- お気に入りは端末の localStorage のみ（アカウント同期なし）
-- Playwright E2E はスモーク中心（実 DB 連携フローは手動検証）
-- 実音声の CI 完全検証は未実施
+- `toggle_loop` は押し続け再生（pointer / キー押し続け）に対応
+- お気に入りはアカウント同期（`sound_favorites`）+ 端末キャッシュ
+- Playwright E2E はスモーク中心（実 DB の招待→再生→OBSは `E2E_LIVE=1` で拡張予定）
+- GitHub Actions で typecheck / unit / lint / e2e smoke を実行
 
 ## 今後の拡張候補
 

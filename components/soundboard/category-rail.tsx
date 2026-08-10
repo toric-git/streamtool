@@ -151,7 +151,7 @@ function PadSheetList({
             ? "whitespace-nowrap rounded-xl border border-border bg-white/80 px-3 py-2 text-sm font-bold"
             : "rounded-xl px-3 py-2.5 text-left text-sm font-bold"
         }
-        title="端末内のお気に入り（他メンバーとは同期しません）"
+        title="あなたのお気に入り（アカウント同期・他端末でも同じ）"
       >
         お気に入り
       </CategoryButton>
