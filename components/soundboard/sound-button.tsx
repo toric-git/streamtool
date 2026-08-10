@@ -25,6 +25,7 @@ type Props = {
   /** Hold-to-play (toggle_loop): pointer down starts, up stops. */
   holdMode?: boolean;
   disabled?: boolean;
+  className?: string;
 };
 
 export function SoundButton({
@@ -39,6 +40,7 @@ export function SoundButton({
   onPressEnd,
   holdMode = false,
   disabled,
+  className,
 }: Props) {
   const isDisabled =
     disabled || state === "disabled" || state === "loading" || state === "cooldown";
@@ -93,7 +95,7 @@ export function SoundButton({
           : undefined
       }
       className={cn(
-        "group relative flex aspect-square w-full min-h-[7.5rem] flex-col overflow-hidden rounded-[1.6rem] border-[3px] border-white/90 px-3 pb-3 pt-2.5 text-left shadow-[0_12px_28px_-14px_rgba(255,107,157,0.55)] transition duration-150",
+        "group relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-[1.6rem] border-[3px] border-white/90 px-2.5 pb-2.5 pt-2 text-left shadow-[0_12px_28px_-14px_rgba(255,107,157,0.55)] transition duration-150",
         "hover:-translate-y-1 hover:brightness-[1.06] hover:shadow-[0_18px_32px_-12px_rgba(255,107,157,0.5)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "active:translate-y-0 active:scale-[0.97]",
@@ -102,6 +104,7 @@ export function SoundButton({
         state === "error" && "ring-2 ring-destructive",
         state === "pressed" && "scale-[0.97]",
         isDisabled && "opacity-55 hover:translate-y-0 hover:brightness-100",
+        className,
       )}
       style={{
         background: imageUrl
@@ -125,7 +128,7 @@ export function SoundButton({
         aria-hidden
       />
       <span
-        className="pointer-events-none absolute inset-x-3 top-2 h-10 rounded-full bg-white/35 blur-md"
+        className="pointer-events-none absolute inset-x-3 top-2 h-8 rounded-full bg-white/35 blur-md"
         aria-hidden
       />
 
@@ -137,22 +140,22 @@ export function SoundButton({
         />
       )}
 
-      {hotkey ? (
-        <span className="relative z-10 flex flex-col leading-none">
-          <span className="font-display text-3xl font-semibold tracking-tight drop-shadow-sm sm:text-4xl">
-            {hotkey}
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-1">
+        {hotkey ? (
+          <span className="flex flex-col leading-none">
+            <span className="font-display text-2xl font-semibold tracking-tight drop-shadow-sm sm:text-3xl">
+              {hotkey}
+            </span>
+            <span className="mt-0.5 text-[0.6rem] font-extrabold tracking-[0.18em] opacity-80">
+              {holdMode ? "HOLD" : "KEY"}
+            </span>
           </span>
-          <span className="mt-0.5 text-[0.65rem] font-extrabold tracking-[0.18em] opacity-80">
-            {holdMode ? "HOLD" : "KEY"}
-          </span>
-        </span>
-      ) : (
-        <span className="relative z-10 h-10" aria-hidden />
-      )}
+        ) : null}
 
-      <span className="relative z-10 mt-auto line-clamp-2 text-center text-sm font-extrabold leading-snug drop-shadow-sm sm:text-base">
-        {name}
-      </span>
+        <span className="line-clamp-2 text-left text-sm font-extrabold leading-snug drop-shadow-sm sm:text-base">
+          {name}
+        </span>
+      </div>
 
       {state === "loading" && <span className="sr-only">読み込み中</span>}
       {state === "playing" && <span className="sr-only">再生中</span>}

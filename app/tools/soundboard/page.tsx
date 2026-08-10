@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { getTool } from "@/lib/tools";
 
 export const metadata: Metadata = {
-  title: "リアルタイムサウンドボード",
+  title: "効果音ポン出し・共有サウンドボード",
   description:
-    "部屋の全員と OBS で同じ効果音を同時再生。押すだけで届く、配信向けサウンドボード。",
+    "VTuber・コラボ配信向け。部屋の全員とOBSで同じ効果音をリアルタイム再生できる、ブラウザの共有サウンドボードです。",
 };
 
 export default function SoundboardToolPage() {

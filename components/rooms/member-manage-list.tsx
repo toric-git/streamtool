@@ -95,6 +95,7 @@ export function MemberManageList({
             actorUserId,
           });
           const isSelf = m.user_id === actorUserId;
+          const playAllowed = m.can_play && !m.is_muted;
 
           return (
             <li
@@ -105,75 +106,59 @@ export function MemberManageList({
                   : "space-y-3 px-4 py-4"
               }
             >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-medium">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <p className="truncate font-medium leading-snug">
                     {m.display_name}
                     {isSelf ? "（あなた）" : ""}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="truncate text-xs text-muted-foreground">
                     {ROLE_LABEL[m.role] ?? m.role}
+                    {" · "}
+                    再生: {playAllowed ? "可" : "不可"}
+                    {!playAllowed && m.is_muted ? "（ミュート）" : ""}
+                    {showAdvanced && (
+                      <> · アップロード: {m.can_upload ? "可" : "不可"}</>
+                    )}
                     {!compact && (
                       <> · {new Date(m.joined_at).toLocaleString("ja-JP")}</>
                     )}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    再生: {m.can_play && !m.is_muted ? "可" : "不可"}
-                    {m.is_muted ? "（ミュート）" : ""}
-                    {showAdvanced && (
-                      <> · アップロード: {m.can_upload ? "可" : "不可"}</>
-                    )}
-                  </p>
                 </div>
+                {manageable && permissions.canMutePlay && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={playAllowed ? "outline" : "secondary"}
+                    disabled={pending}
+                    className={
+                      playAllowed
+                        ? "shrink-0 border-rose-200 font-bold text-rose-700 hover:bg-rose-50"
+                        : "shrink-0 font-bold text-teal-800"
+                    }
+                    aria-pressed={!playAllowed}
+                    onClick={() =>
+                      run(
+                        () =>
+                          setMemberPlayPermission(
+                            roomId,
+                            m.user_id,
+                            !playAllowed,
+                            playAllowed,
+                          ),
+                        playAllowed
+                          ? `${m.display_name} をミュートしました。`
+                          : `${m.display_name} のミュートを解除しました。`,
+                      )
+                    }
+                  >
+                    {playAllowed ? "ミュート" : "ミュート解除"}
+                  </Button>
+                )}
               </div>
 
-              {manageable && (
+              {manageable && (showAdvanced || permissions.canKick) && (
                 <div className="flex flex-wrap gap-1.5">
-                  {permissions.canMutePlay && (
-                    <>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={pending}
-                        onClick={() =>
-                          run(
-                            () =>
-                              setMemberPlayPermission(
-                                roomId,
-                                m.user_id,
-                                false,
-                                true,
-                              ),
-                            `${m.display_name} の再生を禁止しました。`,
-                          )
-                        }
-                      >
-                        再生禁止
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={pending}
-                        onClick={() =>
-                          run(
-                            () =>
-                              setMemberPlayPermission(
-                                roomId,
-                                m.user_id,
-                                true,
-                                false,
-                              ),
-                            `${m.display_name} の再生を許可しました。`,
-                          )
-                        }
-                      >
-                        再生許可
-                      </Button>
-                    </>
-                  )}
-
                   {showAdvanced && permissions.canManageSounds && (
                     <Button
                       type="button"

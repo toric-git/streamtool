@@ -44,7 +44,7 @@ export default async function JoinPage({ params }: Props) {
   }
 
   return (
-    <main className="flex min-h-full flex-1 items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-100 via-teal-50 to-slate-200 px-4 py-12">
+    <main className="flex min-h-full flex-1 items-center justify-center bg-[radial-gradient(ellipse_at_top,rgba(255,77,141,0.18),transparent_45%),radial-gradient(ellipse_at_bottom,rgba(56,189,248,0.2),transparent_40%),linear-gradient(180deg,#fff7fb,#e8f7ff)] px-4 py-12">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>部屋に参加</CardTitle>

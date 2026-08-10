@@ -36,7 +36,8 @@ export type InsertPresetResult =
     };
 
 /**
- * Upload one preset MP3 from default-assets and insert an approved sound row.
+ * Upload one library MP3 and insert an approved sound row.
+ * Reads from `sourcePath` when provided, otherwise `lib/sounds/default-assets/{file}`.
  */
 export async function insertPresetSound(options: {
   admin: AdminClient;
@@ -45,10 +46,12 @@ export async function insertPresetSound(options: {
   preset: DefaultStreamSound;
   categoryId: string | null;
   sortOrder: number;
+  sourcePath?: string;
 }): Promise<InsertPresetResult> {
-  const { admin, roomId, ownerId, preset, categoryId, sortOrder } = options;
+  const { admin, roomId, ownerId, preset, categoryId, sortOrder, sourcePath } =
+    options;
 
-  const localPath = path.join(ASSETS_DIR, preset.file);
+  const localPath = sourcePath ?? path.join(ASSETS_DIR, preset.file);
   let bytes: Buffer;
   try {
     bytes = await readFile(localPath);
@@ -67,11 +70,18 @@ export async function insertPresetSound(options: {
     return { ok: false, reason: "empty" };
   }
 
-  const audioPath = `${roomId}/${ownerId}/${randomUUID()}.mp3`;
+  const ext = path.extname(preset.file).toLowerCase() || ".mp3";
+  const contentType =
+    ext === ".wav"
+      ? "audio/wav"
+      : ext === ".ogg"
+        ? "audio/ogg"
+        : "audio/mpeg";
+  const audioPath = `${roomId}/${ownerId}/${randomUUID()}${ext}`;
   const { error: uploadError } = await admin.storage
     .from(STORAGE_BUCKETS.audio)
     .upload(audioPath, bytes, {
-      contentType: "audio/mpeg",
+      contentType,
       upsert: false,
     });
 
@@ -97,7 +107,7 @@ export async function insertPresetSound(options: {
       button_color: preset.buttonColor,
       text_color: preset.textColor ?? "#ffffff",
       volume: 1,
-      cooldown_ms: preset.cooldownMs ?? 1000,
+      cooldown_ms: preset.cooldownMs ?? 1500,
       duration_ms: estimateMp3DurationMs(bytes.byteLength),
       sort_order: sortOrder,
       approval_status: "approved",
@@ -161,15 +171,24 @@ export async function seedDefaultSounds(options: {
       .select("id")
       .single();
 
-    if (categoryError) {
+    if (createdCategory?.id) {
+      categoryId = createdCategory.id;
+    } else if (categoryError?.code === "23505") {
+      // Concurrent seed / Strict Mode double-invoke: reuse the winner's row.
+      const { data: raced } = await admin
+        .from("sound_categories")
+        .select("id")
+        .eq("room_id", roomId)
+        .eq("name", DEFAULT_STREAM_CATEGORY.name)
+        .maybeSingle();
+      categoryId = raced?.id ?? null;
+    } else if (categoryError) {
       console.error(
         "[sounds]",
         E.CATEGORY_CREATE_FAILED.code,
         categoryError.code,
         categoryError.message,
       );
-    } else {
-      categoryId = createdCategory?.id ?? null;
     }
   }
 

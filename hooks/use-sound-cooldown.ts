@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { REALTIME_LIMITS } from "@/lib/app-config";
 import { nowMs } from "@/lib/utils";
 
 export function useSoundCooldown() {
@@ -59,12 +60,18 @@ export function useSoundCooldown() {
     return () => window.clearInterval(timer);
   }, [activeCooldownKey]);
 
-  function startCooldown(soundId: string, cooldownMs: number) {
+  const isCooling = useCallback((soundId: string) => {
+    const meta = cooldownMeta.current[soundId];
+    return Boolean(meta && meta.until > nowMs());
+  }, []);
+
+  const startCooldown = useCallback((soundId: string, cooldownMs: number) => {
+    const ms = Math.max(cooldownMs, REALTIME_LIMITS.minCooldownMs);
     setCoolingIds((prev) => ({ ...prev, [soundId]: true }));
     setCooldownProgress((prev) => ({ ...prev, [soundId]: 1 }));
     cooldownMeta.current[soundId] = {
-      until: nowMs() + cooldownMs,
-      total: Math.max(cooldownMs, 1),
+      until: nowMs() + ms,
+      total: Math.max(ms, 1),
     };
     if (cooldownTimers.current[soundId]) {
       window.clearTimeout(cooldownTimers.current[soundId]);
@@ -81,12 +88,24 @@ export function useSoundCooldown() {
         delete next[soundId];
         return next;
       });
-    }, cooldownMs);
-  }
+    }, ms);
+  }, []);
+
+  /** Starts cooldown only if the pad is free. Safe against rapid re-entry. */
+  const tryStartCooldown = useCallback(
+    (soundId: string, cooldownMs: number) => {
+      if (isCooling(soundId)) return false;
+      startCooldown(soundId, cooldownMs);
+      return true;
+    },
+    [isCooling, startCooldown],
+  );
 
   return {
     coolingIds,
     cooldownProgress,
+    isCooling,
     startCooldown,
+    tryStartCooldown,
   };
 }

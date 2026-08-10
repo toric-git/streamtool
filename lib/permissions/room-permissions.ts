@@ -113,7 +113,9 @@ export function canUserUpload(options: {
   uploadEnabled: boolean;
 }): boolean {
   const { role, canUploadFlag, uploadEnabled } = options;
-  if (!role || !uploadEnabled) return false;
+  if (!role) return false;
+  // Owners/admins always manage the board (room flag is for members).
   if (role === "owner" || role === "admin") return true;
+  if (!uploadEnabled) return false;
   return canUploadFlag;
 }

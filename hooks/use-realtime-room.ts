@@ -61,6 +61,12 @@ export function useRealtimeRoom({
   const soundsRef = useRef(sounds);
   const memberNamesRef = useRef(memberNames);
   const volumeLayersRef = useRef({ roomVolume, deviceOrObsVolume });
+  const engineOptionsRef = useRef({
+    roomId,
+    maxSimultaneous,
+    isObs,
+    obsToken,
+  });
   const soundIdsKey = sounds.map((s) => s.id).join(",");
 
   useEffect(() => {
@@ -79,32 +85,46 @@ export function useRealtimeRoom({
     volumeLayersRef.current = { roomVolume, deviceOrObsVolume };
   }, [roomVolume, deviceOrObsVolume]);
 
+  useEffect(() => {
+    engineOptionsRef.current = { roomId, maxSimultaneous, isObs, obsToken };
+  }, [roomId, maxSimultaneous, isObs, obsToken]);
+
   const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
-    const getSignedUrl = async (audioPath: string) => {
-      const result = await fetchSignedMediaUrl({
-        roomId,
-        path: audioPath,
-        kind: "audio",
-        obsToken: isObs ? obsToken : undefined,
-      });
-      if (!result.ok) {
-        throw new Error(result.error);
-      }
-      return result.signedUrl;
-    };
+  function ensureEngine(): AudioEngineLike {
+    if (engineRef.current) return engineRef.current;
 
-    engineRef.current = new AudioEngine({
-      maxSimultaneous,
-      getSignedUrl,
+    const engine = new AudioEngine({
+      maxSimultaneous: engineOptionsRef.current.maxSimultaneous,
+      getSignedUrl: async (audioPath: string) => {
+        const opts = engineOptionsRef.current;
+        const result = await fetchSignedMediaUrl({
+          roomId: opts.roomId,
+          path: audioPath,
+          kind: "audio",
+          obsToken: opts.isObs ? opts.obsToken : undefined,
+        });
+        if (!result.ok) {
+          throw new Error(result.error);
+        }
+        return result.signedUrl;
+      },
       volumeLayers: { ...volumeLayersRef.current },
     });
+    engineRef.current = engine;
+    return engine;
+  }
 
+  useEffect(() => {
+    // Eager create for the current room; dispose on room/options change.
+    ensureEngine();
     return () => {
       engineRef.current?.dispose();
       engineRef.current = null;
+      setAudioUnlocked(false);
     };
+    // ensureEngine reads latest options from refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recreate only when identity deps change
   }, [roomId, maxSimultaneous, isObs, obsToken]);
 
   useEffect(() => {
@@ -233,28 +253,43 @@ export function useRealtimeRoom({
   }, [supabase, roomId, enabled, onEvent]);
 
   async function unlockAudio() {
-    const engine = engineRef.current;
-    if (!engine) {
+    try {
+      const engine = ensureEngine();
+      const ok = await engine.unlock();
+      setAudioUnlocked(ok);
+      if (!ok) {
+        setLastError(E.AUDIO_UNLOCK_FAILED);
+      } else {
+        setLastError(null);
+      }
+      return ok;
+    } catch (err) {
+      console.error("[audio]", E.AUDIO_ENGINE_NOT_READY.code, err);
       setLastError(E.AUDIO_ENGINE_NOT_READY);
       return false;
     }
-    const ok = await engine.unlock();
-    setAudioUnlocked(ok);
-    if (!ok) {
-      setLastError(E.AUDIO_UNLOCK_FAILED);
-    } else {
-      setLastError(null);
-    }
-    return ok;
   }
 
   /** Play immediately on this device; mark id so Realtime echo does not double-play. */
   async function playLocal(request: PlayRequest): Promise<boolean> {
-    const engine = engineRef.current;
-    if (!engine || !engine.isUnlocked()) {
+    let engine: AudioEngineLike;
+    try {
+      engine = ensureEngine();
+    } catch (err) {
+      console.error("[audio]", E.AUDIO_ENGINE_NOT_READY.code, err);
       setLastError(E.AUDIO_ENGINE_NOT_READY);
       return false;
     }
+
+    if (!engine.isUnlocked()) {
+      const ok = await engine.unlock();
+      setAudioUnlocked(ok);
+      if (!ok) {
+        setLastError(E.AUDIO_UNLOCK_FAILED);
+        return false;
+      }
+    }
+
     markClientEventSeen(seenIdsRef.current, request.clientEventId);
     try {
       await engine.play(request);
@@ -286,11 +321,24 @@ export function useRealtimeRoom({
   }
 
   async function preloadAll(): Promise<boolean> {
-    const engine = engineRef.current;
-    if (!engine || !audioUnlocked) {
+    let engine: AudioEngineLike;
+    try {
+      engine = ensureEngine();
+    } catch (err) {
+      console.error("[audio]", E.AUDIO_ENGINE_NOT_READY.code, err);
       setLastError(E.AUDIO_ENGINE_NOT_READY);
       return false;
     }
+
+    if (!engine.isUnlocked()) {
+      const ok = await engine.unlock();
+      setAudioUnlocked(ok);
+      if (!ok) {
+        setLastError(E.AUDIO_UNLOCK_FAILED);
+        return false;
+      }
+    }
+
     setPreloadState("loading");
     setLastError(null);
     const results = await Promise.allSettled(

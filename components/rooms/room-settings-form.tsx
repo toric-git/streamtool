@@ -124,15 +124,6 @@ export function RoomSettingsForm({
             />
             アップロードを許可
           </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="uploadRequiresApproval"
-              defaultChecked={room.upload_requires_approval}
-              className="size-4"
-            />
-            アップロード承認が必要
-          </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="masterVolume">部屋音量 (0-1)</Label>
@@ -164,9 +155,13 @@ export function RoomSettingsForm({
                 id="defaultCooldownMs"
                 name="defaultCooldownMs"
                 type="number"
-                min={0}
+                min={1000}
+                step={100}
                 defaultValue={room.default_cooldown_ms}
               />
+              <p className="text-xs text-muted-foreground">
+                連打防止のため 1000ms 以上にしてください
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="maxEventsPerMinute">1分あたり最大イベント</Label>

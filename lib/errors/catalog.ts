@@ -337,6 +337,23 @@ export const E = {
 
   // --- Validation / unknown E90xx ---
   VALIDATION: e("E9001", "入力内容が正しくありません。"),
+  FEEDBACK_REQUIRED: e("E9101", "ご要望・不具合の内容を入力してください。"),
+  FEEDBACK_TOO_LONG: e(
+    "E9102",
+    "メッセージが長すぎます。4000文字以内で入力してください。",
+  ),
+  FEEDBACK_FAILED: e(
+    "E9103",
+    "送信に失敗しました。時間をおいてもう一度お試しください。",
+  ),
+  FEEDBACK_RATE_LIMITED: e(
+    "E9104",
+    "送信が集中しています。しばらく時間をおいてから再度お試しください。",
+  ),
+  FEEDBACK_ADMIN_FORBIDDEN: e(
+    "E9105",
+    "フィードバック管理の権限がありません。",
+  ),
   UNKNOWN: e(
     "E9999",
     "予期しないエラーが発生しました。しばらくしてから再度お試しください。",

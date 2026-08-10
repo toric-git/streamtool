@@ -204,6 +204,56 @@ export type Database = {
           },
         ];
       };
+      feedback_reports: {
+        Row: {
+          id: string;
+          category: "request" | "bug";
+          message: string;
+          contact_email: string | null;
+          contact_name: string | null;
+          page_url: string | null;
+          user_id: string | null;
+          user_agent: string | null;
+          client_key: string | null;
+          status: "open" | "done";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          category: "request" | "bug";
+          message: string;
+          contact_email?: string | null;
+          contact_name?: string | null;
+          page_url?: string | null;
+          user_id?: string | null;
+          user_agent?: string | null;
+          client_key?: string | null;
+          status?: "open" | "done";
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          category?: "request" | "bug";
+          message?: string;
+          contact_email?: string | null;
+          contact_name?: string | null;
+          page_url?: string | null;
+          user_id?: string | null;
+          user_agent?: string | null;
+          client_key?: string | null;
+          status?: "open" | "done";
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feedback_reports_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       sound_categories: {
         Row: {
           id: string;

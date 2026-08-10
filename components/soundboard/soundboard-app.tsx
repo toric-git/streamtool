@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   deleteSound,
   renameSound,
@@ -25,12 +25,14 @@ import {
   SoundGrid,
   type BoardSound,
 } from "@/components/soundboard/sound-grid";
-import { StopAllButton } from "@/components/soundboard/stop-all-button";
+import { LeaveRoomButton } from "@/components/soundboard/leave-room-button";
 import { VolumeSlider } from "@/components/soundboard/volume-slider";
 import type { ManageableMember } from "@/components/rooms/member-manage-list";
 import { ErrorAlert } from "@/components/ui/error-alert";
+import { REALTIME_LIMITS } from "@/lib/app-config";
 import { E, type AppError, withMessage } from "@/lib/errors/catalog";
 import { mapPlaybackError } from "@/lib/errors/messages";
+import { nowMs } from "@/lib/utils";
 import {
   canUserPlay,
   canUserUpload,
@@ -83,9 +85,14 @@ export function SoundboardApp({
   const [categoryId, setCategoryId] = useState<CategoryFilter>(
     () => categories[0]?.id ?? "favorites",
   );
+  // If the board opened before categories existed, we fell back to favorites.
+  // Switch to the first pad sheet once categories arrive (unless user picks favorites later).
+  const pendingPadFallbackRef = useRef(categories.length === 0);
   const [actionError, setActionError] = useState<AppError | null>(null);
   const [, startVolumeTransition] = useTransition();
-  const { coolingIds, cooldownProgress, startCooldown } = useSoundCooldown();
+  const { coolingIds, cooldownProgress, isCooling, tryStartCooldown } =
+    useSoundCooldown();
+  const lastPadPressAtRef = useRef(0);
   const { favoriteIds, toggleFavorite, isFavorite } = useFavoriteSounds(roomId);
   const {
     sounds: liveSounds,
@@ -114,10 +121,23 @@ export function SoundboardApp({
   });
 
   useEffect(() => {
+    if (liveCategories.length === 0) return;
+
+    if (pendingPadFallbackRef.current) {
+      pendingPadFallbackRef.current = false;
+      setCategoryId(liveCategories[0]!.id);
+      return;
+    }
+
     if (categoryId === "favorites") return;
     if (liveCategories.some((c) => c.id === categoryId)) return;
     setCategoryId(liveCategories[0]?.id ?? "favorites");
   }, [liveCategories, categoryId]);
+
+  function handleCategoryChange(id: CategoryFilter) {
+    pendingPadFallbackRef.current = false;
+    setCategoryId(id);
+  }
 
   const soundsWithVolume = useMemo(
     () =>
@@ -154,7 +174,6 @@ export function SoundboardApp({
     unlockAudio,
     playLocal,
     stopLocal,
-    stopAllLocal,
     preloadAll,
     preloadState,
     playingIds,
@@ -230,23 +249,41 @@ export function SoundboardApp({
         return;
       }
       const isLoop = (sound.playback_mode ?? "one_shot") === "toggle_loop";
-      if (!isLoop && coolingIds[sound.id]) {
-        setActionError(
-          withMessage(
-            E.PLAY_COOLDOWN,
-            "クールダウン中です。少し待ってから押してください。",
-          ),
-        );
-        return;
+      if (!isLoop) {
+        const now = nowMs();
+        if (now - lastPadPressAtRef.current < REALTIME_LIMITS.minPadGapMs) {
+          setActionError(
+            withMessage(
+              E.PLAY_COOLDOWN,
+              "連打はできません。少し間隔をあけてください。",
+            ),
+          );
+          return;
+        }
+        if (
+          !tryStartCooldown(
+            sound.id,
+            Math.max(sound.cooldown_ms, REALTIME_LIMITS.minCooldownMs),
+          )
+        ) {
+          setActionError(
+            withMessage(
+              E.PLAY_COOLDOWN,
+              "クールダウン中です。少し待ってから押してください。",
+            ),
+          );
+          return;
+        }
+        lastPadPressAtRef.current = now;
       }
 
       // First pad tap doubles as the browser audio unlock gesture.
-      if (!audioUnlocked) {
-        const ok = await unlockAudio();
-        if (!ok) {
-          setActionError(lastError ?? E.AUDIO_UNLOCK_FAILED);
-          return;
-        }
+      // Always call unlock (idempotent) so a recreated engine cannot stay locked
+      // while React still thinks audioUnlocked is true.
+      const unlocked = await unlockAudio();
+      if (!unlocked) {
+        setActionError(E.AUDIO_UNLOCK_FAILED);
+        return;
       }
 
       const clientEventId = randomUUID();
@@ -265,10 +302,6 @@ export function SoundboardApp({
         return;
       }
 
-      if (!isLoop) {
-        startCooldown(sound.id, sound.cooldown_ms);
-      }
-
       const supabase = createClient();
       void supabase
         .rpc("create_playback_event", {
@@ -285,16 +318,7 @@ export function SoundboardApp({
           setActionError(mapped);
         });
     },
-    [
-      audioUnlocked,
-      canPlay,
-      coolingIds,
-      lastError,
-      playLocal,
-      roomId,
-      startCooldown,
-      unlockAudio,
-    ],
+    [canPlay, playLocal, roomId, tryStartCooldown, unlockAudio],
   );
 
   const emitStop = useCallback(
@@ -320,23 +344,6 @@ export function SoundboardApp({
     [roomId, stopLocal],
   );
 
-  async function emitStopAll() {
-    const clientEventId = randomUUID();
-    stopAllLocal(clientEventId);
-    const supabase = createClient();
-    const { error } = await supabase.rpc("create_playback_event", {
-      p_room_id: roomId,
-      p_sound_id: null,
-      p_action: "stop_all",
-      p_volume: 1,
-      p_client_event_id: clientEventId,
-    });
-    if (error) {
-      console.error("[board] stop_all rejected", error.code);
-      throw new Error(error.message);
-    }
-  }
-
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[linear-gradient(180deg,#fff7fb_0%,#eef9ff_45%,#fff7fb_100%)]">
       <header className="space-y-3 border-b border-border/70 bg-white/75 px-4 py-3 backdrop-blur-sm">
@@ -352,7 +359,7 @@ export function SoundboardApp({
             ) : null}
           </div>
           <ConnectionStatusBadge status={connectionStatus} />
-          {canManage && <StopAllButton onStopAll={emitStopAll} />}
+          <LeaveRoomButton roomId={roomId} role={role} />
         </div>
         {!audioUnlocked && (
           <p className="rounded-xl border border-[var(--hub-coral)]/25 bg-[linear-gradient(90deg,#fff7fb,#ffffff)] px-3 py-2 text-xs font-bold text-muted-foreground">
@@ -403,7 +410,7 @@ export function SoundboardApp({
           categories={liveCategories}
           categoryId={categoryId}
           canManage={canManage}
-          onChange={setCategoryId}
+          onChange={handleCategoryChange}
           onCategoryCreated={upsertCategory}
           onError={setActionError}
         />
@@ -414,7 +421,7 @@ export function SoundboardApp({
             categories={liveCategories}
             categoryId={categoryId}
             canManage={canManage}
-            onChange={setCategoryId}
+            onChange={handleCategoryChange}
             onCategoryCreated={upsertCategory}
             onError={setActionError}
           />
@@ -437,6 +444,7 @@ export function SoundboardApp({
             imageUrls={imageUrls}
             playingIds={playingIds}
             coolingIds={coolingIds}
+            isCooling={isCooling}
             cooldownProgress={cooldownProgress}
             canPlay={canPlay}
             isFavorite={isFavorite}

@@ -12,6 +12,11 @@ import { E, withMessage } from "@/lib/errors/catalog";
 import { verifyStoredAudio, verifyStoredImage } from "@/lib/media/verify-stored";
 import { isOwnerOrAdmin } from "@/lib/permissions/room-permissions";
 import { findPresetByFile } from "@/lib/sounds/default-stream-sounds";
+import {
+  findPublicLibrarySound,
+  listPublicLibrarySounds,
+  publicSoundAbsolutePath,
+} from "@/lib/sounds/public-sound-library";
 import { insertPresetSound } from "@/lib/sounds/seed-default-sounds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -35,7 +40,7 @@ const createSoundSchema = z.object({
   buttonColor: hexColorSchema.default("#FF8FB1"),
   textColor: hexColorSchema.default("#ffffff"),
   volume: volumeSchema.default(1),
-  cooldownMs: z.number().int().min(0).max(60_000).default(1000),
+  cooldownMs: z.number().int().min(1000).max(60_000).default(1500),
   durationMs: z.number().int().positive().max(30_000),
 });
 
@@ -44,7 +49,7 @@ const updateSoundMetaSchema = z.object({
   buttonColor: hexColorSchema,
   textColor: hexColorSchema,
   volume: volumeSchema,
-  cooldownMs: z.number().int().min(0).max(60_000),
+  cooldownMs: z.number().int().min(1000).max(60_000),
   categoryId: z.string().uuid().nullable().optional(),
   imagePath: z.string().nullable().optional(),
   playbackMode: z.enum(["one_shot", "toggle_loop"]).default("one_shot"),
@@ -102,8 +107,7 @@ export async function createSound(
     if (!imageVerify.ok) return actionFail(imageVerify.error);
   }
 
-  const approval: ApprovalStatus =
-    adminRole || !room.upload_requires_approval ? "approved" : "pending";
+  const approval: ApprovalStatus = "approved";
 
   const { data: maxSort } = await actor.supabase
     .from("sounds")
@@ -279,7 +283,7 @@ export async function updateSoundMeta(
     buttonColor: formData.get("buttonColor"),
     textColor: formData.get("textColor"),
     volume: Number(formData.get("volume") ?? 1),
-    cooldownMs: Number(formData.get("cooldownMs") ?? 1000),
+    cooldownMs: Number(formData.get("cooldownMs") ?? 1500),
     categoryId: formData.get("categoryId") || null,
     imagePath: formData.get("imagePath") || null,
     playbackMode: formData.get("playbackMode") || "one_shot",
@@ -477,13 +481,38 @@ export async function reorderSoundsAction(
   return actionOk();
 }
 
+export async function listPublicLibrarySoundsAction(): Promise<
+  ActionResult<
+    {
+      file: string;
+      name: string;
+      buttonColor: string;
+      textColor?: string;
+      publicUrl: string;
+    }[]
+  >
+> {
+  return actionOk(listPublicLibrarySounds());
+}
+
 export async function addPresetSound(
   roomId: string,
   file: string,
   categoryId?: string | null,
 ): Promise<ActionResult<{ soundId: string }>> {
-  const preset = findPresetByFile(file);
+  const publicPreset = findPublicLibrarySound(file);
+  const legacyPreset = publicPreset ? null : findPresetByFile(file);
+  const preset = publicPreset ?? legacyPreset;
   if (!preset) {
+    return actionFail(
+      withMessage(E.VALIDATION, "選べるプリセットサウンドではありません。"),
+    );
+  }
+
+  const sourcePath = publicPreset
+    ? publicSoundAbsolutePath(file)
+    : undefined;
+  if (publicPreset && !sourcePath) {
     return actionFail(
       withMessage(E.VALIDATION, "選べるプリセットサウンドではありません。"),
     );
@@ -546,6 +575,7 @@ export async function addPresetSound(
     preset,
     categoryId: categoryId ?? null,
     sortOrder: (maxSort?.sort_order ?? -1) + 1,
+    sourcePath: sourcePath ?? undefined,
   });
 
   if (!inserted.ok) {

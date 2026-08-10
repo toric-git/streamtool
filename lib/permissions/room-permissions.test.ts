@@ -72,6 +72,13 @@ describe("room permissions", () => {
         canUploadFlag: false,
         uploadEnabled: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      canUserUpload({
+        role: "owner",
+        canUploadFlag: false,
+        uploadEnabled: false,
+      }),
+    ).toBe(true);
   });
 });

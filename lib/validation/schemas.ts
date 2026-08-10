@@ -77,7 +77,7 @@ export const updateRoomSchema = z.object({
   uploadRequiresApproval: z.boolean(),
   masterVolume: volumeSchema,
   obsVolume: volumeSchema,
-  defaultCooldownMs: z.number().int().min(0).max(60_000),
+  defaultCooldownMs: z.number().int().min(1000).max(60_000),
   maxEventsPerMinute: z.number().int().min(1).max(600),
   maxSimultaneousSounds: z.number().int().min(1).max(32),
   maxMembers: z.number().int().min(2).max(200),

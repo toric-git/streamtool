@@ -1,25 +1,45 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addPresetSound } from "@/app/actions/sounds";
+import {
+  addPresetSound,
+  listPublicLibrarySoundsAction,
+} from "@/app/actions/sounds";
 import { SoundButton } from "@/components/soundboard/sound-button";
 import { VolumeSlider } from "@/components/soundboard/volume-slider";
 import { SoundUploadForm } from "@/components/sounds/sound-upload-form";
 import { Button } from "@/components/ui/button";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   hotkeyForIndex,
-  indexForHotkey,
   matchPadHotkey,
+  type PadHotkey,
 } from "@/lib/sounds/pad-hotkeys";
-import { PRESET_LIBRARY_SOUNDS } from "@/lib/sounds/default-stream-sounds";
+import {
+  assignHotkeyBinding,
+  clearHotkeyBinding,
+  effectiveHotkey,
+  findSoundIndexByHotkey,
+  loadPadKeybinds,
+  savePadKeybinds,
+} from "@/lib/sounds/pad-keybinds";
 import type { AppError } from "@/lib/errors/catalog";
+import { E } from "@/lib/errors/catalog";
 import { cn } from "@/lib/utils";
 
 type PreloadState = "idle" | "loading" | "done";
 type AddStep = "chooser" | "preset" | "upload";
+
+type LibrarySound = {
+  file: string;
+  name: string;
+  buttonColor: string;
+  textColor?: string;
+  publicUrl: string;
+};
 
 export type BoardSound = {
   id: string;
@@ -101,6 +121,7 @@ export function SoundGrid({
   imageUrls,
   playingIds,
   coolingIds,
+  isCooling,
   cooldownProgress,
   canPlay,
   isFavorite,
@@ -126,6 +147,7 @@ export function SoundGrid({
   imageUrls: Record<string, string>;
   playingIds: string[];
   coolingIds: Record<string, boolean>;
+  isCooling?: (soundId: string) => boolean;
   cooldownProgress: Record<string, number>;
   canPlay: boolean;
   isFavorite: (soundId: string) => boolean;
@@ -150,18 +172,76 @@ export function SoundGrid({
   const [addStep, setAddStep] = useState<AddStep>("chooser");
   const [addError, setAddError] = useState<AppError | null>(null);
   const [addingPresetFile, setAddingPresetFile] = useState<string | null>(null);
+  const [librarySounds, setLibrarySounds] = useState<LibrarySound[] | null>(
+    null,
+  );
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryQuery, setLibraryQuery] = useState("");
+  const [previewingFile, setPreviewingFile] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState("");
-  const skipRenameBlurRef = useRef(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [listeningHotkey, setListeningHotkey] = useState(false);
+  const [hotkeysEnabled, setHotkeysEnabled] = useState(true);
+  const [hotkeyBindings, setHotkeyBindings] = useState<
+    Record<string, PadHotkey>
+  >({});
   const [pending, startTransition] = useTransition();
   const allowAdd = canUpload && showAddSlots;
   const canEdit = Boolean(onDelete || onRename);
+  const canEditPad = Boolean(onRename || canPlay);
   const existingNameSet = new Set(existingSoundNames);
+  const editingSound = useMemo(
+    () => sounds.find((s) => s.id === editingId) ?? null,
+    [sounds, editingId],
+  );
+  const editingIndex = useMemo(
+    () => sounds.findIndex((s) => s.id === editingId),
+    [sounds, editingId],
+  );
+
+  useEffect(() => {
+    const stored = loadPadKeybinds(roomId);
+    setHotkeysEnabled(stored.enabled);
+    setHotkeyBindings(stored.bindings);
+  }, [roomId]);
+
+  const persistKeybinds = useCallback(
+    (enabled: boolean, bindings: Record<string, PadHotkey>) => {
+      setHotkeysEnabled(enabled);
+      setHotkeyBindings(bindings);
+      savePadKeybinds(roomId, { enabled, bindings });
+    },
+    [roomId],
+  );
+
+  const filteredLibrary =
+    librarySounds?.filter((sound) => {
+      const q = libraryQuery.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        sound.name.toLowerCase().includes(q) ||
+        sound.file.toLowerCase().includes(q)
+      );
+    }) ?? [];
+
+  function stopLibraryPreview() {
+    const audio = previewAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      previewAudioRef.current = null;
+    }
+    setPreviewingFile(null);
+  }
 
   function openAddDialog() {
     setAddError(null);
     setAddStep("chooser");
+    setLibraryQuery("");
+    stopLibraryPreview();
     setAddOpen(true);
   }
 
@@ -170,10 +250,64 @@ export function SoundGrid({
     setAddStep("chooser");
     setAddError(null);
     setAddingPresetFile(null);
+    setLibraryQuery("");
+    stopLibraryPreview();
+  }
+
+  async function openPresetStep() {
+    setAddError(null);
+    setAddStep("preset");
+    setLibraryQuery("");
+    stopLibraryPreview();
+    if (librarySounds) return;
+    setLibraryLoading(true);
+    const result = await listPublicLibrarySoundsAction();
+    setLibraryLoading(false);
+    if (!result.ok) {
+      setAddError({ code: result.code, message: result.error });
+      return;
+    }
+    setLibrarySounds(result.data ?? []);
+  }
+
+  async function previewLibrarySound(sound: LibrarySound) {
+    setAddError(null);
+    if (previewingFile === sound.file && previewAudioRef.current) {
+      stopLibraryPreview();
+      return;
+    }
+
+    stopLibraryPreview();
+    const audio = new Audio(sound.publicUrl);
+    previewAudioRef.current = audio;
+    setPreviewingFile(sound.file);
+    audio.onended = () => {
+      if (previewAudioRef.current === audio) {
+        previewAudioRef.current = null;
+        setPreviewingFile(null);
+      }
+    };
+    audio.onerror = () => {
+      if (previewAudioRef.current === audio) {
+        previewAudioRef.current = null;
+        setPreviewingFile(null);
+      }
+      setAddError(E.SOUND_PREVIEW_FAILED);
+    };
+    try {
+      await audio.play();
+    } catch {
+      if (previewAudioRef.current === audio) {
+        previewAudioRef.current = null;
+        setPreviewingFile(null);
+      }
+      setAddError(E.SOUND_PREVIEW_FAILED);
+    }
   }
 
   function addPreset(file: string) {
     setAddError(null);
+    stopLibraryPreview();
     setAddingPresetFile(file);
     startTransition(async () => {
       const result = await addPresetSound(
@@ -191,36 +325,48 @@ export function SoundGrid({
     });
   }
 
-  function startRename(sound: BoardSound) {
-    if (!onRename) return;
-    skipRenameBlurRef.current = false;
-    setRenamingId(sound.id);
-    setRenameDraft(sound.name);
+  useEffect(() => {
+    return () => {
+      const audio = previewAudioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+        previewAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  function openPadEdit(sound: BoardSound) {
+    setEditingId(sound.id);
+    setEditName(sound.name);
+    setListeningHotkey(false);
   }
 
-  function cancelRename() {
-    skipRenameBlurRef.current = true;
-    setRenamingId(null);
+  function closePadEdit() {
+    setEditingId(null);
+    setEditName("");
+    setListeningHotkey(false);
   }
 
-  function commitRename(soundId: string) {
-    if (skipRenameBlurRef.current) {
-      skipRenameBlurRef.current = false;
-      return;
-    }
-    if (!onRename) {
-      setRenamingId(null);
-      return;
-    }
-    const next = renameDraft.trim();
-    const current = sounds.find((s) => s.id === soundId);
-    setRenamingId(null);
+  function commitPadName() {
+    if (!onRename || !editingId) return;
+    const next = editName.trim();
+    const current = sounds.find((s) => s.id === editingId);
     if (!next || !current || current.name === next) return;
-
     startTransition(async () => {
-      const ok = await onRename(soundId, next);
+      const ok = await onRename(editingId, next);
       if (ok) router.refresh();
     });
+  }
+
+  function resetPadHotkey() {
+    if (!editingId) return;
+    persistKeybinds(
+      hotkeysEnabled,
+      clearHotkeyBinding(hotkeyBindings, editingId),
+    );
+    setListeningHotkey(false);
   }
 
   useEffect(() => {
@@ -237,18 +383,41 @@ export function SoundGrid({
     }
 
     function onKeyDown(event: KeyboardEvent) {
+      if (listeningHotkey && editingId) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setListeningHotkey(false);
+          return;
+        }
+        const hotkey = matchPadHotkey(event);
+        if (!hotkey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        persistKeybinds(
+          hotkeysEnabled,
+          assignHotkeyBinding(hotkeyBindings, editingId, hotkey),
+        );
+        setListeningHotkey(false);
+        return;
+      }
+
+      if (!hotkeysEnabled) return;
       if (typingTarget(event.target as HTMLElement | null) || addOpen) return;
+      if (editingId) return;
       if (event.repeat) return;
 
       const hotkey = matchPadHotkey(event);
       if (!hotkey) return;
-      const index = indexForHotkey(hotkey);
-      if (index < 0 || index >= sounds.length) return;
+      const index = findSoundIndexByHotkey(hotkey, sounds, hotkeyBindings);
+      if (index < 0) return;
 
       const sound = sounds[index];
       if (!sound) return;
       const isLoop = (sound.playback_mode ?? "one_shot") === "toggle_loop";
-      if (!canPlay || (!isLoop && coolingIds[sound.id])) return;
+      const cooling = isCooling
+        ? isCooling(sound.id)
+        : Boolean(coolingIds[sound.id]);
+      if (!canPlay || (!isLoop && cooling)) return;
 
       event.preventDefault();
       if (isLoop) {
@@ -259,10 +428,11 @@ export function SoundGrid({
     }
 
     function onKeyUp(event: KeyboardEvent) {
+      if (!hotkeysEnabled || listeningHotkey || editingId) return;
       if (typingTarget(event.target as HTMLElement | null) || addOpen) return;
       const hotkey = matchPadHotkey(event);
       if (!hotkey) return;
-      const index = indexForHotkey(hotkey);
+      const index = findSoundIndexByHotkey(hotkey, sounds, hotkeyBindings);
       const sound = sounds[index];
       if (!sound || (sound.playback_mode ?? "one_shot") !== "toggle_loop") {
         return;
@@ -273,13 +443,26 @@ export function SoundGrid({
       onStop?.(sound);
     }
 
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("keyup", onKeyUp);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [sounds, canPlay, coolingIds, onPlay, onStop, addOpen]);
+  }, [
+    sounds,
+    canPlay,
+    coolingIds,
+    isCooling,
+    onPlay,
+    onStop,
+    addOpen,
+    hotkeysEnabled,
+    hotkeyBindings,
+    listeningHotkey,
+    editingId,
+    persistKeybinds,
+  ]);
 
   useEffect(() => {
     if (!addOpen) return;
@@ -302,15 +485,7 @@ export function SoundGrid({
 
   if (sounds.length === 0 && !allowAdd) {
     return (
-      <div className="flex min-h-[22rem] flex-col items-center justify-center gap-4 rounded-[1.75rem] border-2 border-dashed border-[var(--hub-coral)]/35 bg-white/70 px-6 py-10 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-        <div className="grid w-full max-w-md grid-cols-3 gap-2 opacity-40" aria-hidden>
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div
-              key={i}
-              className="aspect-square rounded-2xl bg-gradient-to-br from-pink-100 to-sky-100"
-            />
-          ))}
-        </div>
+      <div className="flex min-h-[16rem] flex-col items-center justify-center gap-3 rounded-[1.75rem] border-2 border-dashed border-[var(--hub-coral)]/35 bg-white/70 px-6 py-10 text-center">
         <p className="font-display text-xl font-semibold tracking-tight">
           ぽんだしボード
         </p>
@@ -329,27 +504,50 @@ export function SoundGrid({
             ぽんだしパッド
           </p>
           <p className="text-xs font-bold text-muted-foreground">
-            キー 1 2 3 / Q W E / A S D でも再生できます
+            {hotkeysEnabled
+              ? "ショートカットON · キーボードでも再生できます"
+              : "ショートカットOFF · キーボードでは鳴りません"}
             {allowAdd ? " · 末尾の＋で追加" : ""}
             {canDelete ? " · ゴミ箱で削除" : ""}
-            {onRename ? " · 鉛筆で改名" : ""}
+            {canEditPad ? " · 鉛筆で名前・キー変更" : ""}
           </p>
         </div>
-        {onPreloadAll && sounds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             size="sm"
-            variant="secondary"
-            disabled={preloadState === "loading"}
-            onClick={onPreloadAll}
+            aria-pressed={hotkeysEnabled}
+            onClick={() => persistKeybinds(!hotkeysEnabled, hotkeyBindings)}
+            className={cn(
+              "h-10 rounded-xl px-4 text-sm font-extrabold shadow-sm",
+              hotkeysEnabled
+                ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                : "bg-slate-200 text-slate-600 hover:bg-slate-300",
+            )}
           >
-            {preloadState === "loading"
-              ? "読み込み中…"
-              : preloadState === "done"
-                ? "読み込み済み"
-                : "全てを読み込む"}
+            {hotkeysEnabled ? "ショートカットON" : "ショートカットOFF"}
           </Button>
-        )}
+          {onPreloadAll && sounds.length > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={preloadState === "loading"}
+              onClick={onPreloadAll}
+              className={cn(
+                "h-10 rounded-xl px-4 text-sm font-extrabold shadow-sm",
+                preloadState === "done"
+                  ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  : "bg-sky-500 text-white hover:bg-sky-600",
+              )}
+            >
+              {preloadState === "loading"
+                ? "読み込み中…"
+                : preloadState === "done"
+                  ? "読み込み済み"
+                  : "サウンドを一括読み込み"}
+            </Button>
+          )}
+        </div>
       </div>
 
       <div
@@ -359,7 +557,7 @@ export function SoundGrid({
       >
         {Array.from({ length: totalSlots }, (_, index) => {
           const sound = sounds[index];
-          const hotkey = hotkeyForIndex(index);
+          const slotHotkey = hotkeyForIndex(index);
 
           if (!sound) {
             return (
@@ -375,14 +573,14 @@ export function SoundGrid({
                   "disabled:opacity-50",
                 )}
                 aria-label={
-                  hotkey
-                    ? `サウンドを追加（キー ${hotkey} 枠）`
+                  slotHotkey
+                    ? `サウンドを追加（キー ${slotHotkey} 枠）`
                     : "サウンドを追加"
                 }
               >
-                {hotkey ? (
+                {slotHotkey ? (
                   <span className="absolute left-3 top-2.5 font-display text-2xl font-semibold tracking-tight text-muted-foreground/40">
-                    {hotkey}
+                    {slotHotkey}
                   </span>
                 ) : null}
                 <PlusIcon className="size-10 stroke-[2]" />
@@ -390,7 +588,9 @@ export function SoundGrid({
             );
           }
 
-          const cooling = Boolean(coolingIds[sound.id]);
+          const cooling = isCooling
+            ? isCooling(sound.id)
+            : Boolean(coolingIds[sound.id]);
           const holdMode =
             (sound.playback_mode ?? "one_shot") === "toggle_loop";
           const state = playingIds.includes(sound.id)
@@ -402,17 +602,21 @@ export function SoundGrid({
                 : "idle";
           const fav = isFavorite(sound.id);
           const busyDelete = pending && deletingId === sound.id;
-          const busyRename = pending && renamingId === sound.id;
-          const isRenaming = renamingId === sound.id;
+          const busyEdit = pending && editingId === sound.id;
+          const hotkey = effectiveHotkey(sound.id, index, hotkeyBindings);
+          const showPadChrome = Boolean(canEdit || onVolumeChange || canEditPad);
 
           return (
-            <div key={sound.id} className="space-y-1.5">
-              <div className="relative">
+            <div
+              key={sound.id}
+              className="flex aspect-square flex-col overflow-hidden rounded-[1.6rem] border border-border/70 bg-white/95 shadow-[0_10px_24px_-16px_rgba(15,23,42,0.35)]"
+            >
+              <div className="relative min-h-0 flex-1">
                 <SoundButton
                   name={sound.name}
                   buttonColor={sound.button_color}
                   textColor={sound.text_color}
-                  hotkey={hotkey}
+                  hotkey={hotkeysEnabled ? hotkey : null}
                   imageUrl={
                     sound.image_path
                       ? (imageUrls[sound.image_path] ?? null)
@@ -427,22 +631,44 @@ export function SoundGrid({
                   disabled={
                     !canPlay ||
                     busyDelete ||
-                    busyRename ||
-                    isRenaming ||
+                    busyEdit ||
                     (!holdMode && cooling)
                   }
                   holdMode={holdMode}
                   onPress={() => onPlay(sound)}
                   onPressEnd={() => onStop?.(sound)}
+                  className={cn(
+                    "size-full rounded-none border-0 shadow-none",
+                    showPadChrome ? "rounded-t-[1.45rem]" : "rounded-[1.45rem]",
+                    "hover:translate-y-0 hover:shadow-none",
+                  )}
                 />
-                {canEdit && (
-                  <div className="absolute left-1.5 top-1.5 z-20 flex items-center gap-1">
+                <button
+                  type="button"
+                  className="absolute right-1.5 top-1.5 z-20 flex size-7 items-center justify-center rounded-full bg-white/75 text-sm text-[var(--hub-coral)] shadow-sm backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={
+                    fav
+                      ? `${sound.name}をお気に入りから外す`
+                      : `${sound.name}をお気に入りに追加`
+                  }
+                  aria-pressed={fav}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite(sound.id);
+                  }}
+                >
+                  {fav ? "★" : "☆"}
+                </button>
+              </div>
+              {showPadChrome && (
+                <div className="flex shrink-0 flex-col gap-1 border-t border-border/60 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] px-1.5 py-1.5">
+                  <div className="flex min-h-7 items-center gap-0.5">
                     {canDelete && onDelete && (
                       <button
                         type="button"
-                        className="flex size-8 items-center justify-center rounded-full bg-white/80 text-rose-600 shadow-sm backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                        className="flex size-7 shrink-0 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                         aria-label={`${sound.name}を削除`}
-                        disabled={busyDelete || busyRename || isRenaming}
+                        disabled={busyDelete || busyEdit}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (
@@ -460,86 +686,164 @@ export function SoundGrid({
                           });
                         }}
                       >
-                        <TrashIcon className="size-4" />
+                        <TrashIcon className="size-3.5" />
                       </button>
                     )}
-                    {onRename && (
+                    {canEditPad && (
                       <button
                         type="button"
-                        className="flex size-8 items-center justify-center rounded-full bg-white/80 text-slate-600 shadow-sm backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                        aria-label={`${sound.name}の名前を変更`}
-                        title="名前を変更"
-                        disabled={busyDelete || busyRename}
+                        className="flex size-7 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                        aria-label={`${sound.name}の設定（名前・キー）`}
+                        title="名前・キーを変更"
+                        disabled={busyDelete || busyEdit}
                         onClick={(e) => {
                           e.stopPropagation();
-                          startRename(sound);
+                          openPadEdit(sound);
                         }}
                       >
                         <PencilIcon className="size-3.5" />
                       </button>
                     )}
+                    {onVolumeChange && (
+                      <label
+                        htmlFor={`pad-vol-${sound.id}`}
+                        className="ml-1 truncate text-[10px] font-bold text-muted-foreground"
+                      >
+                        音量
+                        <span className="ml-1 text-foreground">
+                          {Math.round(
+                            Math.min(1, Math.max(0, Number(sound.volume))) *
+                              100,
+                          )}
+                          %
+                        </span>
+                      </label>
+                    )}
                   </div>
-                )}
-                <button
-                  type="button"
-                  className="absolute right-1.5 top-1.5 z-20 flex size-8 items-center justify-center rounded-full bg-white/75 text-sm text-[var(--hub-coral)] shadow-sm backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={
-                    fav
-                      ? `${sound.name}をお気に入りから外す`
-                      : `${sound.name}をお気に入りに追加`
-                  }
-                  aria-pressed={fav}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleFavorite(sound.id);
-                  }}
-                >
-                  {fav ? "★" : "☆"}
-                </button>
-                {isRenaming && (
-                  <form
-                    className="absolute inset-x-2 bottom-2 z-30"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      commitRename(sound.id);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Input
-                      autoFocus
-                      value={renameDraft}
-                      maxLength={40}
-                      disabled={pending}
-                      aria-label="サウンド名"
-                      className="h-9 border-white/90 bg-white/95 text-sm font-bold shadow-md"
-                      onChange={(e) => setRenameDraft(e.target.value)}
-                      onBlur={() => commitRename(sound.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          e.preventDefault();
-                          cancelRename();
-                        }
-                      }}
+                  {onVolumeChange && (
+                    <VolumeSlider
+                      id={`pad-vol-${sound.id}`}
+                      label="音量"
+                      size="sm"
+                      hideLabel
+                      className="mx-auto w-[80%] min-w-0"
+                      value={Number(sound.volume)}
+                      onChange={(v) => onVolumeChange(sound.id, v)}
+                      onCommit={(v) => onVolumeCommit?.(sound.id, v)}
                     />
-                  </form>
-                )}
-              </div>
-              {onVolumeChange && (
-                <div className="rounded-xl border border-border/70 bg-white/90 px-2 py-1.5">
-                  <VolumeSlider
-                    id={`pad-vol-${sound.id}`}
-                    label="音量"
-                    size="sm"
-                    value={Number(sound.volume)}
-                    onChange={(v) => onVolumeChange(sound.id, v)}
-                    onCommit={(v) => onVolumeCommit?.(sound.id, v)}
-                  />
+                  )}
                 </div>
               )}
             </div>
           );
         })}
       </div>
+
+      {editingSound && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          role="presentation"
+          onClick={closePadEdit}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="パッド設定"
+            className="w-full max-w-md space-y-4 rounded-2xl bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-lg font-semibold tracking-tight">
+                  パッド設定
+                </h2>
+                <p className="text-xs font-semibold text-muted-foreground">
+                  名前とキー割り当てを変更できます
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={closePadEdit}
+              >
+                閉じる
+              </Button>
+            </div>
+
+            {onRename && (
+              <div className="space-y-2">
+                <Label htmlFor="pad-edit-name">名前</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="pad-edit-name"
+                    value={editName}
+                    maxLength={40}
+                    disabled={pending}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitPadName();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    disabled={pending}
+                    onClick={commitPadName}
+                  >
+                    保存
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>キー割り当て</Label>
+              <div className="rounded-xl border border-border/70 bg-slate-50 px-3 py-3">
+                <p className="text-sm font-bold">
+                  現在:{" "}
+                  <span className="font-display text-lg tracking-tight">
+                    {effectiveHotkey(
+                      editingSound.id,
+                      editingIndex,
+                      hotkeyBindings,
+                    ) ?? "なし"}
+                  </span>
+                  {!hotkeysEnabled && (
+                    <span className="ml-2 text-xs font-semibold text-amber-700">
+                      （全体OFF中）
+                    </span>
+                  )}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                  {listeningHotkey
+                    ? "割り当てたいキーを押してください（Escでキャンセル）"
+                    : "1–9 / QWERTY などパッド用キーに変更できます"}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={listeningHotkey ? "default" : "secondary"}
+                    onClick={() => setListeningHotkey((v) => !v)}
+                  >
+                    {listeningHotkey ? "キー待ち…" : "キーを変更"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={resetPadHotkey}
+                    disabled={!hotkeyBindings[editingSound.id]}
+                  >
+                    初期キーに戻す
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {addOpen && (
         <div
@@ -551,7 +855,7 @@ export function SoundGrid({
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-4 shadow-xl"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-start justify-between gap-3">
@@ -563,14 +867,14 @@ export function SoundGrid({
                   {addStep === "chooser"
                     ? "サウンドを追加"
                     : addStep === "preset"
-                      ? "プリセットから選ぶ"
+                      ? "サウンドを選択"
                       : "ファイルをアップロード"}
                 </h2>
                 <p className="text-xs font-semibold text-muted-foreground">
                   {addStep === "chooser"
-                    ? "プリセットを選ぶか、自分の音声をアップロードできます"
+                    ? "用意済みの効果音を選ぶか、自分の音声をアップロードできます"
                     : addStep === "preset"
-                      ? "タップで今のパッドに追加します"
+                      ? "試聴してから追加できます"
                       : "空のパッドに新しい音を登録します"}
                 </p>
               </div>
@@ -581,6 +885,7 @@ export function SoundGrid({
                     size="sm"
                     variant="ghost"
                     onClick={() => {
+                      stopLibraryPreview();
                       setAddStep("chooser");
                       setAddError(null);
                     }}
@@ -606,7 +911,7 @@ export function SoundGrid({
                 <button
                   type="button"
                   className="flex flex-col items-start gap-2 rounded-2xl border-2 border-[var(--hub-coral)]/30 bg-[linear-gradient(160deg,#fff7fb,#ffffff)] p-4 text-left transition hover:-translate-y-0.5 hover:border-[var(--hub-coral)]/60"
-                  onClick={() => setAddStep("preset")}
+                  onClick={() => void openPresetStep()}
                 >
                   <span className="font-display text-base font-semibold tracking-tight">
                     サウンドを選択
@@ -631,38 +936,73 @@ export function SoundGrid({
             )}
 
             {addStep === "preset" && (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {PRESET_LIBRARY_SOUNDS.map((preset) => {
-                  const taken = existingNameSet.has(preset.name);
-                  const busy = pending && addingPresetFile === preset.file;
-                  return (
-                    <button
-                      key={preset.file}
-                      type="button"
-                      disabled={taken || pending}
-                      onClick={() => addPreset(preset.file)}
-                      className={cn(
-                        "flex min-h-[4.5rem] flex-col justify-end rounded-xl border border-white/80 px-3 py-2 text-left shadow-sm transition",
-                        taken
-                          ? "cursor-not-allowed opacity-45"
-                          : "hover:-translate-y-0.5 hover:brightness-105",
-                      )}
-                      style={{
-                        background: `linear-gradient(160deg, color-mix(in srgb, ${preset.buttonColor} 30%, white), ${preset.buttonColor})`,
-                        color: preset.textColor ?? "#ffffff",
-                      }}
-                    >
-                      <span className="text-sm font-extrabold leading-snug">
-                        {busy ? "追加中…" : preset.name}
-                      </span>
-                      {taken ? (
-                        <span className="mt-1 text-[10px] font-bold opacity-80">
-                          追加済み
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
+              <div className="space-y-3">
+                <Input
+                  type="search"
+                  value={libraryQuery}
+                  onChange={(e) => setLibraryQuery(e.target.value)}
+                  placeholder="名前で検索…"
+                  aria-label="サウンドを検索"
+                  disabled={libraryLoading || !librarySounds}
+                />
+                {libraryLoading ? (
+                  <p className="py-8 text-center text-sm font-semibold text-muted-foreground">
+                    読み込み中…
+                  </p>
+                ) : filteredLibrary.length === 0 ? (
+                  <p className="py-8 text-center text-sm font-semibold text-muted-foreground">
+                    {librarySounds?.length
+                      ? "一致するサウンドがありません"
+                      : "選べるサウンドがありません"}
+                  </p>
+                ) : (
+                  <div className="grid max-h-[min(60vh,28rem)] grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+                    {filteredLibrary.map((preset) => {
+                      const taken = existingNameSet.has(preset.name);
+                      const busy = pending && addingPresetFile === preset.file;
+                      const previewing = previewingFile === preset.file;
+                      return (
+                        <div
+                          key={preset.file}
+                          className={cn(
+                            "flex min-h-[4.75rem] flex-col justify-between gap-2 rounded-xl border border-white/80 px-3 py-2 shadow-sm",
+                            taken && "opacity-70",
+                          )}
+                          style={{
+                            background: `linear-gradient(160deg, color-mix(in srgb, ${preset.buttonColor} 30%, white), ${preset.buttonColor})`,
+                            color: preset.textColor ?? "#ffffff",
+                          }}
+                        >
+                          <span className="text-sm font-extrabold leading-snug">
+                            {busy ? "追加中…" : preset.name}
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => void previewLibrarySound(preset)}
+                              className="rounded-lg bg-black/20 px-2.5 py-1 text-[11px] font-bold backdrop-blur-sm transition hover:bg-black/30"
+                            >
+                              {previewing ? "停止" : "試聴"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={taken || pending}
+                              onClick={() => addPreset(preset.file)}
+                              className={cn(
+                                "rounded-lg px-2.5 py-1 text-[11px] font-bold transition",
+                                taken
+                                  ? "cursor-not-allowed bg-black/10 opacity-70"
+                                  : "bg-white/85 text-slate-800 hover:bg-white",
+                              )}
+                            >
+                              {taken ? "追加済み" : "追加"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

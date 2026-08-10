@@ -214,4 +214,9 @@
 | 番号 | キー | メッセージ |
 |------|------|------------|
 | E9001 | VALIDATION | 入力内容が正しくありません。 |
+| E9101 | FEEDBACK_REQUIRED | ご要望・不具合の内容を入力してください。 |
+| E9102 | FEEDBACK_TOO_LONG | メッセージが長すぎます。… |
+| E9103 | FEEDBACK_FAILED | 送信に失敗しました。… |
+| E9104 | FEEDBACK_RATE_LIMITED | 送信が集中しています。… |
+| E9105 | FEEDBACK_ADMIN_FORBIDDEN | フィードバック管理の権限がありません。 |
 | E9999 | UNKNOWN | 予期しないエラーが発生しました。… |

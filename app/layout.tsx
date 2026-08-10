@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { Fredoka, Geist_Mono, Nunito } from "next/font/google";
-import { APP_NAME, APP_TAGLINE } from "@/lib/app-config";
+import {
+  APP_NAME,
+  APP_SEO_DESCRIPTION,
+  APP_SEO_KEYWORDS,
+  APP_SEO_TITLE,
+  APP_URL,
+} from "@/lib/app-config";
 import "./globals.css";
 
 const nunito = Nunito({
@@ -21,11 +27,36 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(APP_URL),
   title: {
-    default: APP_NAME,
+    default: APP_SEO_TITLE,
     template: `%s · ${APP_NAME}`,
   },
-  description: APP_TAGLINE,
+  description: APP_SEO_DESCRIPTION,
+  keywords: [...APP_SEO_KEYWORDS],
+  openGraph: {
+    type: "website",
+    locale: "ja_JP",
+    url: APP_URL,
+    siteName: APP_NAME,
+    title: APP_SEO_TITLE,
+    description: APP_SEO_DESCRIPTION,
+    images: [
+      {
+        url: "/image/logo.png",
+        alt: APP_NAME,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: APP_SEO_TITLE,
+    description: APP_SEO_DESCRIPTION,
+    images: ["/image/logo.png"],
+  },
+  alternates: {
+    canonical: "/",
+  },
 };
 
 export default function RootLayout({

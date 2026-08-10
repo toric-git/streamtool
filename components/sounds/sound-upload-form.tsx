@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { createSound } from "@/app/actions/sounds";
 import { readAudioDurationMs, previewAudioFile } from "@/lib/audio/browser-meta";
 import {
@@ -19,6 +19,42 @@ import { E, type AppError, withMessage } from "@/lib/errors/catalog";
 import { cn } from "@/lib/utils";
 
 type Category = { id: string; name: string };
+
+function FilePickButton({
+  inputId,
+  label,
+  fileName,
+  emptyHint,
+  onPick,
+}: {
+  inputId: string;
+  label: string;
+  fileName: string | null;
+  emptyHint: string;
+  onPick: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <Button
+        type="button"
+        id={`${inputId}-trigger`}
+        onClick={onPick}
+        className="h-11 shrink-0 rounded-xl bg-sky-500 px-5 text-sm font-bold text-white shadow-sm hover:bg-sky-600"
+      >
+        {label}
+      </Button>
+      <p
+        className={cn(
+          "min-w-0 flex-1 truncate text-sm font-semibold",
+          fileName ? "text-foreground" : "text-muted-foreground",
+        )}
+        title={fileName ?? undefined}
+      >
+        {fileName ?? emptyHint}
+      </p>
+    </div>
+  );
+}
 
 export function SoundUploadForm({
   roomId,
@@ -39,6 +75,10 @@ export function SoundUploadForm({
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [durationMs, setDurationMs] = useState<number | null>(null);
+  const [audioFileName, setAudioFileName] = useState<string | null>(null);
+  const [imageFileName, setImageFileName] = useState<string | null>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const defaultColor = useMemo(
     () =>
       CUTE_BUTTON_COLORS[
@@ -50,6 +90,7 @@ export function SoundUploadForm({
   const [textColor, setTextColor] = useState(defaultColor.text);
   const audioInputId = compact ? "board-audio" : "audio";
   const nameInputId = compact ? "board-sound-name" : "name";
+  const imageInputId = "image";
 
   function pickCuteColor(hex: string) {
     setButtonColor(hex);
@@ -161,7 +202,7 @@ export function SoundUploadForm({
               formData.get("textColor") || DEFAULT_BUTTON_TEXT_COLOR,
             ),
             volume: Number(formData.get("volume") || 1),
-            cooldownMs: Number(formData.get("cooldownMs") || 1000),
+            cooldownMs: Number(formData.get("cooldownMs") || 1500),
             durationMs: duration,
           });
 
@@ -177,6 +218,8 @@ export function SoundUploadForm({
           );
           form.reset();
           setDurationMs(null);
+          setAudioFileName(null);
+          setImageFileName(null);
           const next =
             CUTE_BUTTON_COLORS[
               Math.floor(Math.random() * CUTE_BUTTON_COLORS.length)
@@ -195,18 +238,21 @@ export function SoundUploadForm({
       {success && <Alert>{success}</Alert>}
 
       <div className="space-y-2">
-        <Label htmlFor={audioInputId}>
+        <Label htmlFor={`${audioInputId}-trigger`}>
           音声ファイル (MP3/WAV/OGG, 10MB・30秒以下)
         </Label>
-        <Input
+        <input
+          ref={audioInputRef}
           id={audioInputId}
           name="audio"
           type="file"
           accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg"
-          required
+          className="sr-only"
+          tabIndex={-1}
           onChange={async (e) => {
             const file = e.target.files?.[0];
             setDurationMs(null);
+            setAudioFileName(file?.name ?? null);
             if (!file) return;
             try {
               const ms = await readAudioDurationMs(file);
@@ -215,6 +261,13 @@ export function SoundUploadForm({
               setError(E.SOUND_META_READ);
             }
           }}
+        />
+        <FilePickButton
+          inputId={audioInputId}
+          label="ファイルを選択"
+          fileName={audioFileName}
+          emptyHint="未選択"
+          onPick={() => audioInputRef.current?.click()}
         />
         {durationMs != null && (
           <p className="text-xs text-muted-foreground">
@@ -302,8 +355,9 @@ export function SoundUploadForm({
               id="cooldownMs"
               name="cooldownMs"
               type="number"
-              min={0}
-              defaultValue={1000}
+              min={1000}
+              step={100}
+              defaultValue={1500}
             />
           </div>
         </div>
@@ -312,7 +366,7 @@ export function SoundUploadForm({
       {compact && (
         <>
           <input type="hidden" name="volume" value="1" />
-          <input type="hidden" name="cooldownMs" value="1000" />
+          <input type="hidden" name="cooldownMs" value="1500" />
         </>
       )}
 
@@ -336,12 +390,25 @@ export function SoundUploadForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="image">背景画像（任意）</Label>
-            <Input
-              id="image"
+            <Label htmlFor={`${imageInputId}-trigger`}>背景画像（任意）</Label>
+            <input
+              ref={imageInputRef}
+              id={imageInputId}
               name="image"
               type="file"
               accept=".jpg,.jpeg,.png,.webp,image/*"
+              className="sr-only"
+              tabIndex={-1}
+              onChange={(e) => {
+                setImageFileName(e.target.files?.[0]?.name ?? null);
+              }}
+            />
+            <FilePickButton
+              inputId={imageInputId}
+              label="画像を選択"
+              fileName={imageFileName}
+              emptyHint="未選択（任意）"
+              onPick={() => imageInputRef.current?.click()}
             />
           </div>
         </>
@@ -374,10 +441,7 @@ export function SoundUploadForm({
           type="button"
           variant="outline"
           onClick={async () => {
-            const input = document.getElementById(
-              audioInputId,
-            ) as HTMLInputElement | null;
-            const file = input?.files?.[0];
+            const file = audioInputRef.current?.files?.[0];
             if (!file) {
               setError(E.SOUND_PREVIEW_REQUIRED);
               return;

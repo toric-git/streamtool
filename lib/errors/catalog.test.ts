@@ -22,5 +22,10 @@ describe("error catalog", () => {
     expect(E.AUDIO_ENGINE_NOT_READY.code).toBe("E5009");
     expect(E.AUDIO_PLAYBACK_FAILED.code).toBe("E5010");
     expect(E.AUDIO_LOCKED.code).toBe("E5011");
+    expect(E.FEEDBACK_REQUIRED.code).toBe("E9101");
+    expect(E.FEEDBACK_TOO_LONG.code).toBe("E9102");
+    expect(E.FEEDBACK_FAILED.code).toBe("E9103");
+    expect(E.FEEDBACK_RATE_LIMITED.code).toBe("E9104");
+    expect(E.FEEDBACK_ADMIN_FORBIDDEN.code).toBe("E9105");
   });
 });

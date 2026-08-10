@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
-import { leaveRoom } from "@/app/actions/rooms";
+import { AppLogo } from "@/components/brand/app-logo";
+import { FeedbackButton } from "@/components/feedback/feedback-button";
 import { UserSettingsPanel } from "@/components/auth/user-settings-panel";
 import {
   RoomSettingsPanel,
@@ -11,7 +12,9 @@ import { SoundboardApp } from "@/components/soundboard/soundboard-app";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
 import { mapRoomPageError } from "@/lib/errors/messages";
+import { E } from "@/lib/errors/catalog";
 import { getPermissionsForRole } from "@/lib/permissions/room-permissions";
+import { seedDefaultSounds } from "@/lib/sounds/seed-default-sounds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   requireRoomActor,
@@ -82,8 +85,41 @@ export default async function RoomPage({ params, searchParams }: Props) {
     ]);
 
   const members = membersResult.data;
-  const sounds = soundsResult.data;
-  const categories = categoriesResult.data;
+  let sounds = soundsResult.data ?? [];
+  let categories = categoriesResult.data ?? [];
+
+  // Recover rooms whose seed never finished (no approved sounds yet).
+  if (permissions.canEditRoom && sounds.length === 0) {
+    try {
+      const admin = createAdminClient();
+      const seeded = await seedDefaultSounds({
+        admin,
+        roomId,
+        ownerId: user.id,
+      });
+      console.info("[rooms] ensure default sounds", seeded);
+      const [soundsRetry, categoriesRetry] = await Promise.all([
+        supabase
+          .from("sounds")
+          .select(
+            "id, name, audio_path, button_color, text_color, image_path, volume, cooldown_ms, category_id, sort_order, playback_mode",
+          )
+          .eq("room_id", roomId)
+          .eq("approval_status", "approved")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true }),
+        supabase
+          .from("sound_categories")
+          .select("id, name, sort_order")
+          .eq("room_id", roomId)
+          .order("sort_order", { ascending: true }),
+      ]);
+      sounds = soundsRetry.data ?? [];
+      categories = categoriesRetry.data ?? [];
+    } catch (err) {
+      console.error("[rooms]", E.ROOM_CREATE_SEED_FAILED.code, err);
+    }
+  }
 
   const settingsPayload: RoomSettingsPayload | null = permissions.canEditRoom
     ? {
@@ -111,6 +147,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
   return (
     <main className="relative flex min-h-full flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b bg-background/80 px-4 py-2">
+        <AppLogo size="sm" className="mr-1" />
         {settingsPayload && (
           <Suspense
             fallback={
@@ -126,21 +163,10 @@ export default async function RoomPage({ params, searchParams }: Props) {
           </Suspense>
         )}
         <UserSettingsPanel displayName={membership.display_name} />
-        <Button asChild variant="ghost" size="sm">
+        <FeedbackButton size="sm" />
+        <Button asChild variant="outline" size="sm" className="font-bold">
           <Link href="/dashboard">ルーム一覧</Link>
         </Button>
-        {membership.role !== "owner" && (
-          <form
-            action={async () => {
-              "use server";
-              await leaveRoom(roomId);
-            }}
-          >
-            <Button type="submit" variant="destructive" size="sm">
-              退出
-            </Button>
-          </form>
-        )}
       </div>
 
       {pageError && (
@@ -164,8 +190,8 @@ export default async function RoomPage({ params, searchParams }: Props) {
         isMuted={membership.is_muted}
         userId={user.id}
         displayName={membership.display_name}
-        sounds={sounds ?? []}
-        categories={categories ?? []}
+        sounds={sounds}
+        categories={categories}
         members={(members ?? []).map((m) => ({
           user_id: m.user_id,
           display_name: m.display_name,

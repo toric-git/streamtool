@@ -82,6 +82,15 @@ npm run test:e2e   # Playwright（要: npx playwright install）
 1. リポジトリを Vercel に接続
 2. 上記環境変数を設定（`NEXT_PUBLIC_APP_URL` は本番 URL）
 3. Supabase Auth Redirect URLs に本番 callback を追加
+4. （任意）`APP_ADMIN_EMAILS` に運用者メールを設定 → `/admin/feedback` で要望・バグを確認
+5. 利用規約 `/terms`・プライバシー `/privacy` を公開前に内容確認
+
+## フィードバック運用
+
+- 利用者はヘッダー「ご要望・バグ報告」から送信
+- 送信は 1時間あたり最大5件 / 1日あたり最大20件（ユーザーまたはIPハッシュ単位）
+- 運用者は `APP_ADMIN_EMAILS` に自分のメールを入れ、`/admin/feedback` で未対応→対応済みを管理
+- DB migration `20260810160000_feedback_reports.sql` と `20260810180000_feedback_ops_rate_limit.sql` が必要
 
 ## OBS ブラウザソース設定
 

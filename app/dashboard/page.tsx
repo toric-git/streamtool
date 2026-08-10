@@ -1,14 +1,20 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions/auth";
+import { isDevAuthBypassEnabled } from "@/lib/auth/dev-bypass";
 import {
   getChosenDisplayName,
   needsDisplayNameSetup,
   PLACEHOLDER_DISPLAY_NAME,
 } from "@/lib/auth/display-name";
-import { APP_NAME } from "@/lib/app-config";
 import { createClient } from "@/lib/supabase/server";
+import { AppLogo } from "@/components/brand/app-logo";
+import { FeedbackButton } from "@/components/feedback/feedback-button";
 import { UserSettingsPanel } from "@/components/auth/user-settings-panel";
+import {
+  DashboardRoomList,
+  type DashboardRoomItem,
+} from "@/components/rooms/dashboard-room-list";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { RoomRole } from "@/types/database";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -57,6 +64,20 @@ export default async function DashboardPage() {
     console.error("[dashboard] list rooms failed", error.code);
   }
 
+  const rooms: DashboardRoomItem[] = (memberships ?? [])
+    .map((m) => {
+      const room = Array.isArray(m.rooms) ? m.rooms[0] : m.rooms;
+      if (!room) return null;
+      return {
+        id: room.id,
+        name: room.name,
+        room_code: room.room_code,
+        description: room.description,
+        role: m.role as RoomRole,
+      };
+    })
+    .filter((r): r is DashboardRoomItem => r != null);
+
   return (
     <main className="relative flex min-h-full flex-1 flex-col overflow-hidden">
       <div
@@ -64,25 +85,25 @@ export default async function DashboardPage() {
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,77,141,0.12),transparent_45%),linear-gradient(180deg,#fff7fb,#e8f7ff)]"
       />
       <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-10">
+      {isDevAuthBypassEnabled() && (
+        <p className="rounded-xl border border-amber-300/80 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-950">
+          開発用ログイン省略が有効です（DEV_AUTH_BYPASS）。本番では無効です。
+        </p>
+      )}
       <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold text-primary">
-            <Link href="/" className="hover:underline">
-              {APP_NAME}
-            </Link>
-            {" · "}
-            <Link href="/tools/soundboard" className="hover:underline">
-              サウンドボード
-            </Link>
-          </p>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">
-            マイ部屋
-          </h1>
-          <p className="mt-1 font-semibold text-muted-foreground">
-            ようこそ、{welcomeName} さん。部屋を開いてすぐ押せます。
-          </p>
+        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+          <AppLogo size="md" priority />
+          <div className="min-w-0">
+            <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+              マイ部屋
+            </h1>
+            <p className="mt-0.5 truncate font-semibold text-muted-foreground">
+              ようこそ、{welcomeName} さん。部屋を開いてすぐ押せます。
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <FeedbackButton />
           <UserSettingsPanel displayName={welcomeName} />
           <Button asChild className="font-bold shadow-none">
             <Link href="/rooms/new">部屋を作成</Link>
@@ -99,11 +120,11 @@ export default async function DashboardPage() {
         <CardHeader>
           <CardTitle className="font-display">あなたの部屋</CardTitle>
           <CardDescription className="font-semibold">
-            所有・参加中の部屋一覧です。招待コードは各部屋の「招待」から共有できます。
+            所有・参加中の部屋一覧です。「保存して退出」した部屋はここに残ります。オーナーは削除、参加者は退出できます。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {!memberships?.length ? (
+          {!rooms.length ? (
             <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
               <p>まだ部屋がありません。</p>
               <Button asChild className="mt-4">
@@ -111,28 +132,7 @@ export default async function DashboardPage() {
               </Button>
             </div>
           ) : (
-            <ul className="divide-y rounded-xl border">
-              {memberships.map((m) => {
-                const room = Array.isArray(m.rooms) ? m.rooms[0] : m.rooms;
-                if (!room) return null;
-                return (
-                  <li
-                    key={room.id}
-                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{room.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {m.role} · コード {room.room_code}
-                      </p>
-                    </div>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={`/rooms/${room.id}`}>開く</Link>
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
+            <DashboardRoomList rooms={rooms} />
           )}
 
           <div className="pt-2">

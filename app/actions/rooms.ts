@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { APP_URL } from "@/lib/app-config";
 import {
@@ -42,7 +41,7 @@ export async function createRoom(
     guestEnabled: formData.get("guestEnabled") === "on",
     guestCanPlay: formData.get("guestCanPlay") === "on",
     uploadEnabled: formData.get("uploadEnabled") === "on",
-    uploadRequiresApproval: formData.get("uploadRequiresApproval") === "on",
+    uploadRequiresApproval: false,
   });
 
   if (!parsed.success) {
@@ -167,37 +166,31 @@ export async function createRoom(
     return actionFail(E.ROOM_CREATE_MEMBER);
   }
 
-  // Seed starter pads after redirect so room open is not blocked by uploads.
-  const seedRoomId = roomId;
-  const seedOwnerId = user.id;
-  after(async () => {
-    try {
-      const seedAdmin = createAdminClient();
-      const seeded = await seedDefaultSounds({
-        admin: seedAdmin,
-        roomId: seedRoomId,
-        ownerId: seedOwnerId,
-      });
-      console.info("[rooms] default sounds", seeded);
-      if (seeded.seeded < 4 && seeded.failed > 0) {
-        console.error(
-          "[rooms]",
-          seeded.seeded === 0
-            ? E.ROOM_CREATE_SEED_FAILED.code
-            : E.SOUND_SEED_PARTIAL.code,
-          seeded,
-          { userId: seedOwnerId, roomId: seedRoomId },
-        );
-      }
-      revalidatePath(`/rooms/${seedRoomId}`);
-      revalidatePath("/dashboard");
-    } catch (err) {
-      // Room remains usable; owner can upload sounds manually.
-      console.error("[rooms]", E.ROOM_CREATE_SEED_FAILED.code, err);
+  // Seed starter pads before redirect so the board opens with the default 4 sounds.
+  try {
+    const seeded = await seedDefaultSounds({
+      admin,
+      roomId,
+      ownerId: user.id,
+    });
+    console.info("[rooms] default sounds", seeded);
+    if (seeded.seeded < 4 && seeded.failed > 0) {
+      console.error(
+        "[rooms]",
+        seeded.seeded === 0
+          ? E.ROOM_CREATE_SEED_FAILED.code
+          : E.SOUND_SEED_PARTIAL.code,
+        seeded,
+        { userId: user.id, roomId },
+      );
     }
-  });
+  } catch (err) {
+    // Room remains usable; owner can add sounds manually.
+    console.error("[rooms]", E.ROOM_CREATE_SEED_FAILED.code, err);
+  }
 
   revalidatePath("/dashboard");
+  revalidatePath(`/rooms/${roomId}`);
   redirect(`/rooms/${roomId}`);
 }
 
@@ -221,10 +214,10 @@ export async function updateRoom(
     guestEnabled: formData.get("guestEnabled") === "on",
     guestCanPlay: formData.get("guestCanPlay") === "on",
     uploadEnabled: formData.get("uploadEnabled") === "on",
-    uploadRequiresApproval: formData.get("uploadRequiresApproval") === "on",
+    uploadRequiresApproval: false,
     masterVolume: Number(formData.get("masterVolume") ?? 1),
     obsVolume: Number(formData.get("obsVolume") ?? 1),
-    defaultCooldownMs: Number(formData.get("defaultCooldownMs") ?? 1000),
+    defaultCooldownMs: Number(formData.get("defaultCooldownMs") ?? 1500),
     maxEventsPerMinute: Number(formData.get("maxEventsPerMinute") ?? 30),
     maxSimultaneousSounds: Number(formData.get("maxSimultaneousSounds") ?? 4),
     maxMembers: Number(formData.get("maxMembers") ?? 30),

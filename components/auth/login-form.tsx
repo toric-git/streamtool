@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   signInWithEmail,
@@ -182,6 +183,22 @@ export function LoginForm() {
                 ? "ログイン"
                 : "アカウント作成"}
           </Button>
+          {mode === "signup" && (
+            <p className="text-center text-xs font-semibold leading-relaxed text-muted-foreground">
+              登録をもって
+              <Link href="/terms" className="underline-offset-2 hover:underline">
+                利用規約
+              </Link>
+              および
+              <Link
+                href="/privacy"
+                className="underline-offset-2 hover:underline"
+              >
+                プライバシーポリシー
+              </Link>
+              に同意したものとみなします。
+            </p>
+          )}
         </form>
 
         <div className="relative py-2 text-center text-xs text-muted-foreground">

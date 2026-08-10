@@ -12,6 +12,8 @@ type Props = {
   className?: string;
   /** Compact for pad / list rows */
   size?: "md" | "sm";
+  /** When true, only the range input is rendered (label rendered by parent). */
+  hideLabel?: boolean;
 };
 
 export function VolumeSlider({
@@ -23,6 +25,7 @@ export function VolumeSlider({
   disabled,
   className,
   size = "md",
+  hideLabel = false,
 }: Props) {
   const percent = Math.round(Math.min(1, Math.max(0, value)) * 100);
 
@@ -34,16 +37,18 @@ export function VolumeSlider({
         className,
       )}
     >
-      <label
-        htmlFor={id}
-        className={cn(
-          "shrink-0 font-bold text-muted-foreground",
-          size === "sm" ? "text-[10px]" : "text-xs",
-        )}
-      >
-        {label}
-        <span className="ml-1 text-foreground">{percent}%</span>
-      </label>
+      {!hideLabel && (
+        <label
+          htmlFor={id}
+          className={cn(
+            "shrink-0 font-bold text-muted-foreground",
+            size === "sm" ? "text-[10px]" : "text-xs",
+          )}
+        >
+          {label}
+          <span className="ml-1 text-foreground">{percent}%</span>
+        </label>
+      )}
       <input
         id={id}
         type="range"
@@ -52,7 +57,7 @@ export function VolumeSlider({
         step={0.01}
         value={value}
         disabled={disabled}
-        aria-label={label}
+        aria-label={`${label} ${percent}%`}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
         onChange={(e) => onChange(Number(e.target.value))}
