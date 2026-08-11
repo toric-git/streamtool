@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { CreateRoomForm } from "@/components/rooms/create-room-form";
 import { Button } from "@/components/ui/button";
 import { needsDisplayNameSetup } from "@/lib/auth/display-name";
+import { hasPaidRoomCapacity } from "@/lib/billing/capacity";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function NewRoomPage() {
@@ -31,7 +32,7 @@ export default async function NewRoomPage() {
           <Link href="/dashboard">戻る</Link>
         </Button>
       </div>
-      <CreateRoomForm />
+      <CreateRoomForm paidCapacity={hasPaidRoomCapacity(user.email)} />
     </main>
   );
 }

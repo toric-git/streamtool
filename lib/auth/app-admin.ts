@@ -42,7 +42,6 @@ export function feedbackClientKey(options: {
     return `u:${options.userId}`;
   }
   const pepper =
-    process.env.OBS_TOKEN_PEPPER?.trim() ||
     process.env.FEEDBACK_RATE_PEPPER?.trim() ||
     "feedback-rate";
   const ip = options.ip?.trim() || "unknown";

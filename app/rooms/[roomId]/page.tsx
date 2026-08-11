@@ -13,12 +13,11 @@ import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
 import { mapRoomPageError } from "@/lib/errors/messages";
 import { E } from "@/lib/errors/catalog";
-import { getPermissionsForRole } from "@/lib/permissions/room-permissions";
+import { hasPaidRoomCapacity } from "@/lib/billing/capacity";
 import { seedDefaultSounds } from "@/lib/sounds/seed-default-sounds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   requireRoomActor,
-  type AppSupabaseClient,
 } from "@/lib/supabase/auth-context";
 import type { RoomRole } from "@/types/database";
 
@@ -43,14 +42,12 @@ export default async function RoomPage({ params, searchParams }: Props) {
   const { data: room } = await supabase
     .from("rooms")
     .select(
-      "id, name, description, room_code, master_volume, guest_can_play, max_simultaneous_sounds, upload_enabled, upload_requires_approval, guest_enabled, obs_volume, default_cooldown_ms, max_events_per_minute, max_members",
+      "id, name, description, room_code, master_volume, guest_can_play, max_simultaneous_sounds, upload_enabled, upload_requires_approval, guest_enabled, default_cooldown_ms, max_events_per_minute, max_members",
     )
     .eq("id", roomId)
     .maybeSingle();
 
   if (!room) notFound();
-
-  const permissions = getPermissionsForRole(membership.role);
 
   const [membersResult, soundsResult, categoriesResult, settingsExtras] =
     await Promise.all([
@@ -75,13 +72,9 @@ export default async function RoomPage({ params, searchParams }: Props) {
         .select("id, name, sort_order")
         .eq("room_id", roomId)
         .order("sort_order", { ascending: true }),
-      permissions.canEditRoom
-        ? loadRoomSettingsExtras({
-            supabase,
-            roomId,
-            isOwner: membership.role === "owner",
-          })
-        : Promise.resolve({ hasPassword: false, tokens: [] as RoomSettingsPayload["tokens"] }),
+      membership.role === "owner"
+        ? loadRoomSettingsExtras({ roomId })
+        : Promise.resolve({ hasPassword: false }),
     ]);
 
   const members = membersResult.data;
@@ -89,7 +82,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
   let categories = categoriesResult.data ?? [];
 
   // Recover rooms whose seed never finished (no approved sounds yet).
-  if (permissions.canEditRoom && sounds.length === 0) {
+  if (membership.role === "owner" && sounds.length === 0) {
     try {
       const admin = createAdminClient();
       const seeded = await seedDefaultSounds({
@@ -121,28 +114,28 @@ export default async function RoomPage({ params, searchParams }: Props) {
     }
   }
 
-  const settingsPayload: RoomSettingsPayload | null = permissions.canEditRoom
-    ? {
-        room: {
-          id: room.id,
-          name: room.name,
-          description: room.description,
-          guest_enabled: room.guest_enabled,
-          guest_can_play: room.guest_can_play,
-          upload_enabled: room.upload_enabled,
-          upload_requires_approval: room.upload_requires_approval,
-          master_volume: room.master_volume,
-          obs_volume: room.obs_volume,
-          default_cooldown_ms: room.default_cooldown_ms,
-          max_events_per_minute: room.max_events_per_minute,
-          max_simultaneous_sounds: room.max_simultaneous_sounds,
-          max_members: room.max_members,
-          has_password: settingsExtras.hasPassword,
-        },
-        role: membership.role,
-        tokens: settingsExtras.tokens,
-      }
-    : null;
+  const settingsPayload: RoomSettingsPayload | null =
+    membership.role === "owner"
+      ? {
+          room: {
+            id: room.id,
+            name: room.name,
+            description: room.description,
+            guest_enabled: room.guest_enabled,
+            guest_can_play: room.guest_can_play,
+            upload_enabled: room.upload_enabled,
+            upload_requires_approval: room.upload_requires_approval,
+            master_volume: room.master_volume,
+            default_cooldown_ms: room.default_cooldown_ms,
+            max_events_per_minute: room.max_events_per_minute,
+            max_simultaneous_sounds: room.max_simultaneous_sounds,
+            max_members: room.max_members,
+            has_password: settingsExtras.hasPassword,
+          },
+          role: membership.role,
+          paidCapacity: hasPaidRoomCapacity(user.email),
+        }
+      : null;
 
   return (
     <main className="relative flex min-h-full flex-1 flex-col">
@@ -152,7 +145,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
           <Suspense
             fallback={
               <Button type="button" variant="outline" size="sm" disabled>
-                部屋設定
+                オーナー設定
               </Button>
             }
           >
@@ -207,21 +200,12 @@ export default async function RoomPage({ params, searchParams }: Props) {
 }
 
 async function loadRoomSettingsExtras({
-  supabase,
   roomId,
-  isOwner,
 }: {
-  supabase: AppSupabaseClient;
   roomId: string;
-  isOwner: boolean;
 }): Promise<{
   hasPassword: boolean;
-  tokens: RoomSettingsPayload["tokens"];
 }> {
-  if (!isOwner) {
-    return { hasPassword: false, tokens: [] };
-  }
-
   let hasPassword = false;
   try {
     const admin = createAdminClient();
@@ -235,11 +219,5 @@ async function loadRoomSettingsExtras({
     hasPassword = false;
   }
 
-  const { data: tokenRows } = await supabase
-    .from("obs_tokens")
-    .select("id, token_hint, enabled, created_at, last_used_at")
-    .eq("room_id", roomId)
-    .order("created_at", { ascending: false });
-
-  return { hasPassword, tokens: tokenRows ?? [] };
+  return { hasPassword };
 }

@@ -15,11 +15,6 @@ test.describe("smoke", () => {
     await expect(page.getByLabel("表示名")).toBeVisible();
   });
 
-  test("obs without token shows error", async ({ page }) => {
-    await page.goto("/obs/00000000-0000-0000-0000-000000000000");
-    await expect(page.getByText(/OBSトークン/)).toBeVisible();
-  });
-
   test("soundboard tool page links into product flow", async ({ page }) => {
     await page.goto("/tools/soundboard");
     await expect(
@@ -29,7 +24,7 @@ test.describe("smoke", () => {
 });
 
 /**
- * Full invite → play → OBS path needs a seeded Supabase project + credentials.
+ * Full invite → play path needs a seeded Supabase project + credentials.
  * Keep this skipped in CI; enable locally with E2E_LIVE=1 and env secrets.
  */
 test.describe("live room flow", () => {
@@ -38,7 +33,7 @@ test.describe("live room flow", () => {
     "Set E2E_LIVE=1 with a seeded Supabase project to run multiplayer playback checks.",
   );
 
-  test("placeholder for invite-play-obs", async () => {
+  test("placeholder for invite-play", async () => {
     // Intentionally empty scaffold — wire credentials + room fixtures next.
     expect(true).toBe(true);
   });

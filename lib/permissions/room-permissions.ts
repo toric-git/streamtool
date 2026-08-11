@@ -12,7 +12,6 @@ export type RoomPermissions = {
   canMutePlay: boolean;
   canEditRoom: boolean;
   canDeleteRoom: boolean;
-  canManageObsToken: boolean;
   canStopAll: boolean;
   canReorderSounds: boolean;
 };
@@ -29,7 +28,6 @@ const DENY_ALL: RoomPermissions = {
   canMutePlay: false,
   canEditRoom: false,
   canDeleteRoom: false,
-  canManageObsToken: false,
   canStopAll: false,
   canReorderSounds: false,
 };
@@ -51,7 +49,6 @@ export function getPermissionsForRole(role: RoomRole | null | undefined): RoomPe
         canMutePlay: true,
         canEditRoom: true,
         canDeleteRoom: true,
-        canManageObsToken: true,
         canStopAll: true,
         canReorderSounds: true,
       };
@@ -68,7 +65,6 @@ export function getPermissionsForRole(role: RoomRole | null | undefined): RoomPe
         canMutePlay: true,
         canEditRoom: false,
         canDeleteRoom: false,
-        canManageObsToken: false,
         canStopAll: true,
         canReorderSounds: true,
       };

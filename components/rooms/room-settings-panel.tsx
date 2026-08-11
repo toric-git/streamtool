@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ObsSetupDialog } from "@/components/rooms/obs-setup-dialog";
+import { ObsUsageGuide } from "@/components/rooms/obs-usage-guide";
 import { RoomSettingsForm } from "@/components/rooms/room-settings-form";
 import { Button } from "@/components/ui/button";
 import type { RoomRole, Tables } from "@/types/database";
@@ -18,20 +18,13 @@ export type RoomSettingsPayload = {
     | "upload_enabled"
     | "upload_requires_approval"
     | "master_volume"
-    | "obs_volume"
     | "default_cooldown_ms"
     | "max_events_per_minute"
     | "max_simultaneous_sounds"
     | "max_members"
   > & { has_password: boolean };
   role: RoomRole;
-  tokens: {
-    id: string;
-    token_hint: string | null;
-    enabled: boolean;
-    created_at: string;
-    last_used_at: string | null;
-  }[];
+  paidCapacity: boolean;
 };
 
 export function RoomSettingsPanel({
@@ -41,9 +34,7 @@ export function RoomSettingsPanel({
   payload: RoomSettingsPayload;
   defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(
-    () => defaultOpen || false,
-  );
+  const [open, setOpen] = useState(() => defaultOpen || false);
   const titleId = useId();
   const router = useRouter();
   const pathname = usePathname();
@@ -87,7 +78,7 @@ export function RoomSettingsPanel({
         size="sm"
         onClick={() => setOpen(true)}
       >
-        部屋設定
+        オーナー設定
       </Button>
 
       {open && (
@@ -100,7 +91,7 @@ export function RoomSettingsPanel({
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
@@ -109,7 +100,7 @@ export function RoomSettingsPanel({
                   id={titleId}
                   className="font-display text-lg font-semibold tracking-tight"
                 >
-                  部屋設定
+                  オーナー設定
                 </h2>
                 <p className="text-xs font-semibold text-muted-foreground">
                   閉じるとボードに戻ります（部屋からは出ません）
@@ -119,14 +110,13 @@ export function RoomSettingsPanel({
                 ボードに戻る
               </Button>
             </div>
-            <div className="space-y-6 overflow-y-auto px-4 py-4">
-              <RoomSettingsForm room={payload.room} role={payload.role} />
-              {payload.role === "owner" && (
-                <ObsSetupDialog
-                  roomId={payload.room.id}
-                  tokens={payload.tokens}
-                />
-              )}
+            <div className="grid gap-6 overflow-y-auto px-4 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
+              <RoomSettingsForm
+                room={payload.room}
+                role={payload.role}
+                paidCapacity={payload.paidCapacity}
+              />
+              <ObsUsageGuide />
             </div>
           </div>
         </div>

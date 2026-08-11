@@ -11,6 +11,7 @@ describe("error catalog", () => {
     expect(E.AUTH_DISPLAY_NAME_REQUIRED.code).toBe("E1013");
     expect(E.PROFILE_NAME_UPDATE_FAILED.code).toBe("E1014");
     expect(E.ROOM_CREATE_SEED_FAILED.code).toBe("E2105");
+    expect(E.ROOM_CAPACITY_PAID_REQUIRED.code).toBe("E2106");
     expect(E.SOUND_SEED_FORBIDDEN.code).toBe("E4025");
     expect(E.SOUND_SEED_FAILED.code).toBe("E4026");
     expect(E.SOUND_SEED_NONE.code).toBe("E4027");

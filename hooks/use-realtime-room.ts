@@ -28,8 +28,6 @@ type Options = {
   deviceOrObsVolume: number;
   maxSimultaneous: number;
   enabled: boolean;
-  isObs?: boolean;
-  obsToken?: string;
   onEvent?: (event: PlaybackEventPayload) => void;
 };
 
@@ -41,8 +39,6 @@ export function useRealtimeRoom({
   deviceOrObsVolume,
   maxSimultaneous,
   enabled,
-  isObs = false,
-  obsToken,
   onEvent,
 }: Options) {
   const [connectionStatus, setConnectionStatus] =
@@ -64,8 +60,6 @@ export function useRealtimeRoom({
   const engineOptionsRef = useRef({
     roomId,
     maxSimultaneous,
-    isObs,
-    obsToken,
   });
   const soundIdsKey = sounds.map((s) => s.id).join(",");
   const [preloadSoundIdsKey, setPreloadSoundIdsKey] = useState(soundIdsKey);
@@ -88,8 +82,8 @@ export function useRealtimeRoom({
   }, [roomVolume, deviceOrObsVolume]);
 
   useEffect(() => {
-    engineOptionsRef.current = { roomId, maxSimultaneous, isObs, obsToken };
-  }, [roomId, maxSimultaneous, isObs, obsToken]);
+    engineOptionsRef.current = { roomId, maxSimultaneous };
+  }, [roomId, maxSimultaneous]);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -104,7 +98,6 @@ export function useRealtimeRoom({
           roomId: opts.roomId,
           path: audioPath,
           kind: "audio",
-          obsToken: opts.isObs ? opts.obsToken : undefined,
         });
         if (!result.ok) {
           throw new Error(result.error);
@@ -125,7 +118,7 @@ export function useRealtimeRoom({
       engineRef.current = null;
       setAudioUnlocked(false);
     };
-  }, [roomId, maxSimultaneous, isObs, obsToken]);
+  }, [roomId, maxSimultaneous]);
 
   useEffect(() => {
     engineRef.current?.setVolumeLayers({ roomVolume, deviceOrObsVolume });

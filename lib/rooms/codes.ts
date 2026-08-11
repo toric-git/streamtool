@@ -16,13 +16,3 @@ export function generateRoomCode(length = ROOM_LIMITS.roomCodeLength): string {
 export function buildInviteUrl(appUrl: string, roomCode: string): string {
   return `${appUrl.replace(/\/$/, "")}/join/${roomCode}`;
 }
-
-export function buildObsUrl(
-  appUrl: string,
-  roomId: string,
-  plainToken: string,
-): string {
-  const url = new URL(`${appUrl.replace(/\/$/, "")}/obs/${roomId}`);
-  url.searchParams.set("token", plainToken);
-  return url.toString();
-}

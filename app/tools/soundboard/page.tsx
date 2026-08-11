@@ -7,7 +7,7 @@ import { getTool } from "@/lib/tools";
 export const metadata: Metadata = {
   title: "効果音ポン出し・共有サウンドボード",
   description:
-    "VTuber・コラボ配信向け。部屋の全員とOBSで同じ効果音をリアルタイム再生できる、ブラウザの共有サウンドボードです。",
+    "VTuber・コラボ配信向け。部屋の全員で同じ効果音をリアルタイム再生し、OBSのアプリ音声キャプチャで配信に乗せられる共有サウンドボードです。",
 };
 
 export default function SoundboardToolPage() {
@@ -35,7 +35,7 @@ export default function SoundboardToolPage() {
             大きいボタンで、配信中でも押しやすい
           </li>
           <li className="rounded-2xl border border-border bg-white/80 px-4 py-3">
-            部屋のメンバーと OBS に同時再生
+            部屋のメンバーと同時再生（OBSはアプリ音声キャプチャ）
           </li>
           <li className="rounded-2xl border border-border bg-white/80 px-4 py-3">
             招待リンクでゲストもすぐ参加

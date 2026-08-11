@@ -14,7 +14,7 @@
 | E40xx | サウンド / メディア / 初期サウンド |
 | E45xx | カテゴリー |
 | E50xx | 再生 / 音声エンジン |
-| E60xx | OBS |
+| E60xx | （欠番・旧 OBS トークン） |
 | E90xx | 入力検証・不明 |
 
 ---
@@ -26,6 +26,7 @@
 | 番号 | キー | メッセージ | 想定シーン |
 |------|------|------------|------------|
 | E2105 | `ROOM_CREATE_SEED_FAILED` | 部屋は作成されたが初期サウンド設置に失敗 | 部屋作成直後の自動シード失敗（ログ／サポート用。部屋自体は使える） |
+| E2106 | `ROOM_CAPACITY_PAID_REQUIRED` | 8人以上の人数設定には課金が必要 | 無料は最大7人。作成・オーナー設定の両方で検証 |
 | E4025 | `SOUND_SEED_FORBIDDEN` | 初期サウンド追加はオーナー／管理者のみ | （手動シード廃止。互換のためコードは残置） |
 | E4026 | `SOUND_SEED_FAILED` | 初期サウンド追加に失敗 | 部屋作成時シードで1件も追加できなかった（ログ） |
 | E4027 | `SOUND_SEED_NONE` | 同名のため追加できる初期音がない | （手動シード廃止。互換のためコードは残置） |
@@ -93,13 +94,14 @@
 | E2103 | ROOM_CREATE_CODE | 部屋コードの発行に失敗しました。… |
 | E2104 | ROOM_CREATE_MEMBER | 部屋メンバーの登録に失敗しました。… |
 | E2105 | ROOM_CREATE_SEED_FAILED | 部屋は作成されましたが、初期サウンドの設置に失敗しました。… **（新規）** |
+| E2106 | ROOM_CAPACITY_PAID_REQUIRED | 参加可能人数を 8 人以上にするには課金が必要です。無料プランは 7 人までです。 |
 
-### E22xx 部屋設定・削除・退出
+### E22xx オーナー設定・削除・退出
 
 | 番号 | キー | メッセージ |
 |------|------|------------|
-| E2201 | ROOM_UPDATE_FORBIDDEN | 部屋設定を変更する権限がありません。 |
-| E2202 | ROOM_UPDATE_FAILED | 部屋設定の更新に失敗しました。 |
+| E2201 | ROOM_UPDATE_FORBIDDEN | オーナー設定を変更する権限がありません。 |
+| E2202 | ROOM_UPDATE_FAILED | オーナー設定の更新に失敗しました。 |
 | E2203 | ROOM_DELETE_FORBIDDEN | 部屋を削除できるのはオーナーのみです。 |
 | E2204 | ROOM_DELETE_FAILED | 部屋の削除に失敗しました。 |
 | E2205 | ROOM_OWNER_LEAVE | オーナーは退出できません。… |
@@ -196,18 +198,9 @@
 | E5010 | AUDIO_PLAYBACK_FAILED | ローカル再生失敗 **（新規）** |
 | E5011 | AUDIO_LOCKED | 音声ロック中 **（新規）** |
 
-### E60xx OBS
+### E60xx（欠番・旧 OBS トークン）
 
-| 番号 | キー | メッセージ |
-|------|------|------------|
-| E6001 | OBS_ISSUE_FORBIDDEN | OBSトークン発行はオーナーのみ |
-| E6002 | OBS_CONFIG_MISSING | SERVICE_ROLE / PEPPER 未設定 |
-| E6003 | OBS_ISSUE_FAILED | OBSトークン発行失敗 |
-| E6004 | OBS_ISSUE_INVALID | 発行結果が不正 |
-| E6005 | OBS_VALIDATE_FAILED | OBSトークン検証失敗 |
-| E6006 | OBS_ANON_FAILED | OBS匿名サインイン失敗 |
-| E6007 | OBS_SESSION_FAILED | OBSセッション準備失敗 |
-| E6008 | OBS_INIT_FAILED | OBS初期化失敗 |
+E6001〜E6008 は旧 OBS トークン連携用。再割り当てしない。
 
 ### E90xx 検証・不明
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AppLogo } from "@/components/brand/app-logo";
 import { SiteFooter } from "@/components/hub/site-footer";
 import { SiteHeader } from "@/components/hub/site-header";
+import { ObsUsageGuide } from "@/components/rooms/obs-usage-guide";
 import { Button } from "@/components/ui/button";
 import {
   APP_NAME,
@@ -55,7 +56,7 @@ const HIGHLIGHTS = [
   },
   {
     title: "OBSへ効果音をポン出し",
-    body: "OBSのブラウザソース向けに音声を出力できます。配信中にワンタップで効果音を流し、配信にメリハリをつけられます。",
+    body: "ボードの音をOBSのアプリケーション音声キャプチャで取り込み、配信中にワンタップで効果音を流せます。",
     accent: "var(--hub-sky)",
     tint: "bg-[rgba(125,211,252,0.16)]",
   },
@@ -80,7 +81,7 @@ const USE_CASES = [
   },
   {
     title: "OBS配信の演出",
-    body: "Stream Deckなしでも、ブラウザのサウンドボードからOBSへ効果音を乗せられます。",
+    body: "Stream Deckなしでも、ブラウザのサウンドボードをアプリ音声キャプチャでOBSへ乗せられます。",
     accent: "var(--hub-sky)",
   },
 ] as const;
@@ -195,6 +196,26 @@ export default function HomePage() {
               </li>
             ))}
           </ul>
+        </div>
+      </section>
+
+      <section
+        id="obs"
+        className={`relative border-t border-border/60 px-6 py-16 md:px-10 ${SECTION_WASH}`}
+      >
+        <div className="mx-auto w-full max-w-5xl">
+          <p className="text-sm font-bold text-sky-600">配信連携</p>
+          <h2 className="mt-1 font-display text-3xl font-semibold tracking-tight md:text-4xl">
+            OBSでの使い方
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-muted-foreground sm:text-base">
+            ブラウザソースや専用トークンは不要です。ボードの音をアプリケーション音声キャプチャで取り込みます。
+          </p>
+          <ObsUsageGuide
+            context="marketing"
+            showHeading={false}
+            className="mt-10 space-y-4 rounded-2xl border border-border/80 bg-white/90 p-5 sm:p-6"
+          />
         </div>
       </section>
 

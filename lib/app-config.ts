@@ -11,7 +11,7 @@ export const APP_SEO_TITLE =
 
 /** Canonical meta description for the marketing homepage. */
 export const APP_SEO_DESCRIPTION =
-  "「みんなの効果音」は、配信コラボメンバーが同じルームに参加し、リアルタイムで効果音を鳴らせる共有サウンドボードです。OBS配信への音声出力、オリジナル音源のアップロード、効果音ボタンのカスタマイズに対応します。リスナー参加型でも楽しく使えます。";
+  "「みんなの効果音」は、配信コラボメンバーが同じルームに参加し、リアルタイムで効果音を鳴らせる共有サウンドボードです。OBSへの音声取り込み、オリジナル音源のアップロード、効果音ボタンのカスタマイズに対応します。リスナー参加型でも楽しく使えます。";
 
 /** Primary search phrases to reinforce on the homepage (not for stuffing). */
 export const APP_SEO_KEYWORDS = [

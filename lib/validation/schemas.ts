@@ -64,6 +64,7 @@ export const createRoomSchema = z.object({
   guestCanPlay: z.boolean().default(true),
   uploadEnabled: z.boolean().default(false),
   uploadRequiresApproval: z.boolean().default(false),
+  maxMembers: z.number().int().min(2).max(200),
 });
 
 export const updateRoomSchema = z.object({
@@ -76,7 +77,6 @@ export const updateRoomSchema = z.object({
   uploadEnabled: z.boolean(),
   uploadRequiresApproval: z.boolean(),
   masterVolume: volumeSchema,
-  obsVolume: volumeSchema,
   defaultCooldownMs: z.number().int().min(1000).max(60_000),
   maxEventsPerMinute: z.number().int().min(1).max(600),
   maxSimultaneousSounds: z.number().int().min(1).max(32),

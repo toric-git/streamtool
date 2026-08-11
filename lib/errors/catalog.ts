@@ -10,10 +10,10 @@
  *   E40xx サウンド / メディア / 初期サウンドシード
  *   E45xx カテゴリー
  *   E50xx 再生 / 音声エンジン
- *   E60xx OBS
  *   E90xx 入力検証・クライアント・不明
  *
  * 欠番: E4019（未使用。再割り当てしない）
+ * 欠番帯: E60xx（旧 OBS トークン連携。再割り当てしない）
  * 表示名: Google full_name は使わない。user_metadata.display_name のみ採用。
  * 一覧ドキュメント: docs/ERROR_CODES.md
  */
@@ -112,13 +112,17 @@ export const E = {
     "E2105",
     "部屋は作成されましたが、初期サウンド（正解・ハズレ・ドドン・ファンファーレ）の設置に失敗しました。サウンド管理から追加してください。",
   ),
+  ROOM_CAPACITY_PAID_REQUIRED: e(
+    "E2106",
+    "参加可能人数を 8 人以上にするには課金が必要です。無料プランは 7 人までです。",
+  ),
 
   // --- Room update / delete / leave E22xx ---
   ROOM_UPDATE_FORBIDDEN: e(
     "E2201",
-    "部屋設定を変更する権限がありません。",
+    "オーナー設定を変更する権限がありません。",
   ),
-  ROOM_UPDATE_FAILED: e("E2202", "部屋設定の更新に失敗しました。"),
+  ROOM_UPDATE_FAILED: e("E2202", "オーナー設定の更新に失敗しました。"),
   ROOM_DELETE_FORBIDDEN: e(
     "E2203",
     "部屋を削除できるのはオーナーのみです。",
@@ -315,25 +319,6 @@ export const E = {
     "E5011",
     "音声がロックされています。画面の案内に従って音声をオンにしてください。",
   ),
-
-  // --- OBS E60xx ---
-  OBS_ISSUE_FORBIDDEN: e(
-    "E6001",
-    "OBSトークンを発行できるのはオーナーのみです。",
-  ),
-  OBS_CONFIG_MISSING: e(
-    "E6002",
-    "SUPABASE_SERVICE_ROLE_KEY または OBS_TOKEN_PEPPER が未設定です。",
-  ),
-  OBS_ISSUE_FAILED: e("E6003", "OBSトークンの発行に失敗しました。"),
-  OBS_ISSUE_INVALID: e("E6004", "発行結果が不正です。"),
-  OBS_VALIDATE_FAILED: e("E6005", "OBSトークンの検証に失敗しました。"),
-  OBS_ANON_FAILED: e(
-    "E6006",
-    "OBS用の匿名サインインに失敗しました。Anonymous Sign-Ins を有効にしてください。",
-  ),
-  OBS_SESSION_FAILED: e("E6007", "OBSセッションの準備に失敗しました。"),
-  OBS_INIT_FAILED: e("E6008", "OBSの初期化に失敗しました。"),
 
   // --- Validation / unknown E90xx ---
   VALIDATION: e("E9001", "入力内容が正しくありません。"),

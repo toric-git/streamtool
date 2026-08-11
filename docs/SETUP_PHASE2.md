@@ -14,7 +14,7 @@
 cp .env.example .env.local
 ```
 
-`.env.local` を編集し、上記キーと `OBS_TOKEN_PEPPER`（例: `openssl rand -hex 32`）を設定。
+`.env.local` を編集し、上記キーを設定。
 
 ## 3. Auth 設定（Dashboard）
 

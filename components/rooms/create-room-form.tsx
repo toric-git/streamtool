@@ -2,13 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { createRoom } from "@/app/actions/rooms";
+import { MaxMembersField } from "@/components/rooms/max-members-field";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AppError } from "@/lib/errors/catalog";
 
-export function CreateRoomForm() {
+export function CreateRoomForm({
+  paidCapacity = false,
+}: {
+  paidCapacity?: boolean;
+}) {
   const [error, setError] = useState<AppError | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -69,6 +74,8 @@ export function CreateRoomForm() {
             disabled={pending}
           />
         </div>
+
+        <MaxMembersField paid={paidCapacity} disabled={pending} />
 
         <div className="space-y-2">
           <Label htmlFor="password">参加パスワード（任意）</Label>

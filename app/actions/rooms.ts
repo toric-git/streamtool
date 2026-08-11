@@ -2,6 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import {
+  FREE_MAX_MEMBERS,
+  hasPaidRoomCapacity,
+  requiresPaidCapacity,
+} from "@/lib/billing/capacity";
 import { APP_URL } from "@/lib/app-config";
 import {
   actionFail,
@@ -42,6 +47,7 @@ export async function createRoom(
     guestCanPlay: formData.get("guestCanPlay") === "on",
     uploadEnabled: formData.get("uploadEnabled") === "on",
     uploadRequiresApproval: false,
+    maxMembers: Number(formData.get("maxMembers") ?? FREE_MAX_MEMBERS),
   });
 
   if (!parsed.success) {
@@ -51,6 +57,11 @@ export async function createRoom(
         parsed.error.issues[0]?.message ?? E.VALIDATION.message,
       ),
     );
+  }
+
+  const paid = hasPaidRoomCapacity(user.email);
+  if (requiresPaidCapacity(parsed.data.maxMembers) && !paid) {
+    return actionFail(E.ROOM_CAPACITY_PAID_REQUIRED);
   }
 
   const { data: profile } = await supabase
@@ -117,6 +128,7 @@ export async function createRoom(
         guest_can_play: parsed.data.guestCanPlay,
         upload_enabled: parsed.data.uploadEnabled,
         upload_requires_approval: parsed.data.uploadRequiresApproval,
+        max_members: parsed.data.maxMembers,
       })
       .select("id")
       .single();
@@ -202,7 +214,7 @@ export async function updateRoom(
   if (!actor.ok) return actionFailFrom(actor);
 
   const role = actor.membership.role;
-  if (role !== "owner" && role !== "admin") {
+  if (role !== "owner") {
     return actionFail(E.ROOM_UPDATE_FORBIDDEN);
   }
 
@@ -216,7 +228,6 @@ export async function updateRoom(
     uploadEnabled: formData.get("uploadEnabled") === "on",
     uploadRequiresApproval: false,
     masterVolume: Number(formData.get("masterVolume") ?? 1),
-    obsVolume: Number(formData.get("obsVolume") ?? 1),
     defaultCooldownMs: Number(formData.get("defaultCooldownMs") ?? 1500),
     maxEventsPerMinute: Number(formData.get("maxEventsPerMinute") ?? 30),
     maxSimultaneousSounds: Number(formData.get("maxSimultaneousSounds") ?? 4),
@@ -232,6 +243,11 @@ export async function updateRoom(
     );
   }
 
+  const paid = hasPaidRoomCapacity(actor.user.email);
+  if (requiresPaidCapacity(parsed.data.maxMembers) && !paid) {
+    return actionFail(E.ROOM_CAPACITY_PAID_REQUIRED);
+  }
+
   const patch: TablesUpdate<"rooms"> = {
     name: parsed.data.name,
     description: parsed.data.description || null,
@@ -240,19 +256,16 @@ export async function updateRoom(
     upload_enabled: parsed.data.uploadEnabled,
     upload_requires_approval: parsed.data.uploadRequiresApproval,
     master_volume: parsed.data.masterVolume,
-    obs_volume: parsed.data.obsVolume,
     default_cooldown_ms: parsed.data.defaultCooldownMs,
     max_events_per_minute: parsed.data.maxEventsPerMinute,
     max_simultaneous_sounds: parsed.data.maxSimultaneousSounds,
     max_members: parsed.data.maxMembers,
   };
 
-  if (role === "owner") {
-    if (parsed.data.clearPassword) {
-      patch.password_hash = null;
-    } else if (parsed.data.password?.trim()) {
-      patch.password_hash = await hashRoomPassword(parsed.data.password.trim());
-    }
+  if (parsed.data.clearPassword) {
+    patch.password_hash = null;
+  } else if (parsed.data.password?.trim()) {
+    patch.password_hash = await hashRoomPassword(parsed.data.password.trim());
   }
 
   const { error } = await actor.supabase

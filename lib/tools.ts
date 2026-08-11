@@ -14,7 +14,7 @@ export const TOOLS: ToolDefinition[] = [
     id: "soundboard",
     name: "リアルタイムサウンドボード",
     shortDescription:
-      "部屋の全員と OBS で同じ効果音を同時再生。押すだけで届く、配信向けボード。",
+      "部屋の全員で同じ効果音を同時再生。OBSはアプリ音声キャプチャで取り込み。",
     href: "/tools/soundboard",
     status: "available",
     accent: "#ff4d8d",

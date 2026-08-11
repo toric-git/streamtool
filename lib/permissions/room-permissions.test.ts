@@ -9,15 +9,13 @@ describe("room permissions", () => {
   it("gives owner full control", () => {
     const p = getPermissionsForRole("owner");
     expect(p.canDeleteRoom).toBe(true);
-    expect(p.canManageObsToken).toBe(true);
     expect(p.canStopAll).toBe(true);
   });
 
-  it("prevents admin from deleting room or rotating OBS token", () => {
+  it("prevents admin from deleting room", () => {
     const p = getPermissionsForRole("admin");
     expect(p.canManageSounds).toBe(true);
     expect(p.canDeleteRoom).toBe(false);
-    expect(p.canManageObsToken).toBe(false);
     expect(p.canAssignAdmin).toBe(false);
   });
 
